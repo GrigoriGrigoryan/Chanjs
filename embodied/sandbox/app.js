@@ -825,7 +825,7 @@ if (!await loadVal()) {
   const poll = setInterval(async () => { if (await loadVal()) { clearInterval(poll); setStartReady(true); } }, 20000);
 }
 const runParam = new URLSearchParams(location.search).get('run');   // reopen a past real run: ?run=<id>
-if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await loadRecording(runParam);
+if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await openRecording(runParam);
 window.ChanjLoader?.finish();
 const clock = new THREE.Clock(); let hudT = 0;
 const flyPos = new THREE.Vector3();
