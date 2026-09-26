@@ -161,6 +161,28 @@ test('seed reproducibility, differing realizations, clamp, and readout counters'
   assert.ok(a.counts[2] > before);
 });
 
+test('named Poisson programs and phenomenological modulation are seeded, decaying inputs', () => {
+  const data=network(2,[],{modulator:[0],target:[1]});
+  const a=new FlyBrain(data,91),b=new FlyBrain(data,91);
+  for(const brain of [a,b]){
+    brain.setInputProgram('modulator',{rateHz:200,startMs:0,durationMs:100});
+    brain.setModulators({state:{source:'modulator',target:'target',impulse:.5,tauMs:10,thresholdShift:2}});
+    brain.advance(50);
+  }
+  assert.deepEqual(a.counts,b.counts);
+  assert.ok(a.counts[0]>0,'program stimulates through seeded Bernoulli input');
+  // A fresh source spike fixes the state at >=0.5 (shift >=1mV) instead of
+  // depending on when the last random program spike happened to land.
+  for(const brain of [a,b]){brain.inject('modulator');brain.step();brain.step();}
+  assert.ok(a.modulationSnapshot().state>=.5);
+  a.setState(1,-46);b.setState(1,-46);
+  a.step();b.step();
+  assert.ok(a.counts[1]>0,'modulation makes the documented target threshold reachable');
+  const peak=a.modulationSnapshot().state;
+  a.advance(150);
+  assert.ok(a.modulationSnapshot().state<peak*.001,'modulator state decays after its input window');
+});
+
 test('class source is standalone for an offline Blob worker', () => {
   const scope = {};
   vm.runInNewContext('this.FlyBrain = ' + FlyBrain.toString(),scope);
@@ -181,7 +203,17 @@ test('full published graph: payload integrity, bitter suppression, perturbation,
   const at = packed.byteOffset, bytes = packed.buffer;
   const data = {offsets:new Uint32Array(bytes,at+meta.byteOffsets.offsets,meta.neuronCount+1),
     targets:new Uint32Array(bytes,at+meta.byteOffsets.targets,meta.edgeCount),
-    weights:new Int16Array(bytes,at+meta.byteOffsets.weights,meta.edgeCount),groups:meta.groups};
+    weights:new Int16Array(bytes,at+meta.byteOffsets.weights,meta.edgeCount),
+    ids:new BigUint64Array(bytes,at+meta.byteOffsets.ids,meta.neuronCount),groups:meta.groups};
+  const modulationScope={};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'data/modulators.js'),'utf8'),modulationScope);
+  const mapping=modulationScope.ModulationData;
+  assert.equal(mapping.source.release,'v1.1.0');
+  const publishedRoots=new Set([...data.ids].map(String));
+  for(const [name,roots] of Object.entries(mapping.groups)){
+    assert.ok(roots.length>0,`${name} has annotation members`);
+    assert.ok(roots.every(root=>publishedRoots.has(String(root))),`${name} only contains v630 roots`);
+  }
   const quiet = new FlyBrain(data,123);
   quiet.advance(1000);
   assert.equal(quiet.totalSpikes,0);

@@ -23,6 +23,19 @@
       <label><input id="motor" type="checkbox" disabled> Silence MN9</label>
       <button id="reset" disabled>New trial</button>
     </div>
+    <section class="assay" aria-labelledby="assay-title">
+      <div><h2 id="assay-title">State-dependent food offer</h2><p>Each three-second offer is fixed. “Accept” means the computed MN9-driven extension reaches 0.85. Modulator states are an explicit model assumption, not hormone concentrations.</p></div>
+      <div class="assay-controls">
+        <label>Offer <select id="offer" disabled><option value="safe">Safe · 120 Hz sugar</option><option value="risky">Risky · 200 Hz sugar + 45 Hz bitter</option></select></label>
+        <label>Internal state <select id="condition" disabled><option value="baseline">Baseline</option><option value="daReward">Dopamine reward-like</option><option value="daAversive">Dopamine aversive-like</option><option value="octopamine">Octopamine arousal-like</option></select></label>
+        <label>Control <select id="state-control" disabled><option value="normal">Normal mapping</option><option value="sourceSilenced">Source silenced</option><option value="targetDisabled">Target disabled</option><option value="shuffledTarget">Seeded shuffled target</option></select></label>
+        <button id="run-offer" disabled>Run fixed offer</button>
+        <button id="download-trials" disabled>Download trials</button>
+      </div>
+      <div class="trial-state"><div><span>Offer input</span><strong id="offer-input">—</strong></div><div><span>Modulator state</span><strong id="modulator-state">—</strong></div><div><span>Decision</span><strong id="decision">—</strong></div><div><span>Reaction time</span><strong id="reaction">—</strong></div><div><span>Trial seed</span><strong id="trial-seed">—</strong></div></div>
+      <p id="trial-note">Run a fixed offer to compare the same sensory input under different modeled internal states.</p>
+      <div class="trial-log" id="trial-log" aria-label="Completed trial log"></div>
+    </section>
     <div class="signals" aria-label="Live causal signals">
       <div><span>Taste input</span><strong id="input-rate">0 Hz</strong></div><b aria-hidden="true">→</b>
       <div><span>Network spikes</span><strong id="network-rate">0 / s</strong></div><b aria-hidden="true">→</b>
@@ -46,6 +59,7 @@
   <script src="draw.js"></script>
   <script src="app.js"></script>
   <script src="data/connectome.js" onerror="document.getElementById('loading').textContent='The network file could not load. Extract the complete ZIP, then open index.html.'"></script>
+  <script src="data/modulators.js" onerror="document.getElementById('loading').textContent='The modulation-group file could not load. Extract the complete project again.'"></script>
   <script>startExperiment().catch(showFailure);</script>
 </body>
 </html>

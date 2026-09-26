@@ -9,7 +9,8 @@ let displayedCounts=[0,0,0], rateDuration=0;
 let framesSinceRaster=0;
 
 function experimentWorker(FlyBrain, FlyBody) {
-  let brain, body, paused=false, lastWall=0, credit=0, sequence=0, raster=[], config, seed;
+  let brain, body, paused=false, lastWall=0, credit=0, sequence=0, raster=[], config, seed, trial=null, lastTrial=null;
+  const records=[];
   let computeMs=0, stepsSinceReport=0, reportedAt=0;
   let watch;
   function report() {
@@ -17,20 +18,61 @@ function experimentWorker(FlyBrain, FlyBody) {
     const m=config.groups.mn9;
     postMessage({type:'state',sequence:sequence++,brain:snap,body:body.snapshot(),events:raster,
       mn9:m.map(i=>({index:i,spikes:brain.counts[i],voltage:brain.voltage(i)})),computeMs,steps:stepsSinceReport,seed,
-      memoryBytes:config.buffer.byteLength + brain.size * 65,paused});
+      memoryBytes:config.buffer.byteLength + brain.size * 65,paused,modulation:brain.modulationSnapshot(),trial,lastTrial,records:records.slice(-12)});
     raster=[];computeMs=0;stepsSinceReport=0;reportedAt=brain.tick;
   }
   function initialize(newSeed) {
     seed=newSeed;
     const {meta,buffer}=config, n=meta.neuronCount,m=meta.edgeCount,o=meta.byteOffsets;
+    const ids=new BigUint64Array(buffer,o.ids,n), rootIndex=new Map();
+    for(let i=0;i<n;i++)rootIndex.set(String(ids[i]),i);
+    const modulationGroups={};
+    for(const [name,rootIds] of Object.entries(config.modulationData.groups)) {
+      modulationGroups[name]=rootIds.map(id=>rootIndex.get(String(id))).filter(i=>i!==undefined);
+      if(!modulationGroups[name].length)throw new Error('No v630 neurons found for '+name);
+    }
     brain=new FlyBrain({offsets:new Uint32Array(buffer,o.offsets,n+1),targets:new Uint32Array(buffer,o.targets,m),
-      weights:new Int16Array(buffer,o.weights,m),ids:new BigUint64Array(buffer,o.ids,n),
-      groups:{sweet:meta.groups.sweet,bitter:meta.groups.bitter,mn9:meta.groups.mn9,roundup:meta.groups.roundup}},seed);
+      weights:new Int16Array(buffer,o.weights,m),ids,
+      groups:{sweet:meta.groups.sweet,bitter:meta.groups.bitter,mn9:meta.groups.mn9,roundup:meta.groups.roundup,...modulationGroups}},seed);
     body=new FlyBody();watch=new Int16Array(n).fill(-1);
     for(let k=0;k<21;k++){watch[meta.groups.sweet[k]]=k;watch[meta.groups.bitter[k]]=21+k;}
     watch[meta.groups.mn9[0]]=42;watch[meta.groups.mn9[1]]=43;
     raster=[];credit=0;computeMs=0;stepsSinceReport=0;reportedAt=0;lastWall=performance.now();
-    config.groups=meta.groups;report();
+    config.groups={...meta.groups,...modulationGroups};trial=null;lastTrial=null;report();
+  }
+  const conditions={
+    daReward:{source:'daReward',rateHz:90,impulse:.0005,tauMs:500,thresholdShift:1.15,label:'dopamine reward-like'},
+    daAversive:{source:'daAversive',rateHz:110,impulse:.009,tauMs:500,thresholdShift:-1.15,label:'dopamine aversive-like'},
+    octopamine:{source:'octopamine',rateHz:90,impulse:.0007,tauMs:500,thresholdShift:.55,label:'octopamine arousal-like'}
+  };
+  function shuffledTargets(seed, excluded) {
+    const targets=[];let value=(seed>>>0)||1;
+    while(targets.length<2){
+      value=(Math.imul(value,1664525)+1013904223)>>>0;
+      const candidate=value%brain.size;
+      if(!excluded.has(candidate)&&!targets.includes(candidate))targets.push(candidate);
+    }
+    return targets;
+  }
+  function beginTrial(spec) {
+    initialize(spec.seed);
+    body.drop={x:105,y:23,radius:27};
+    const offer=spec.offer==='risky'?{name:'risky',sweetHz:200,bitterHz:45}:{name:'safe',sweetHz:120,bitterHz:0};
+    const condition=conditions[spec.condition];
+    const control=spec.control||'normal';
+    let modulationRule=null;
+    if(condition) {
+      brain.setInputProgram(condition.source,{rateHz:condition.rateHz,startMs:0,durationMs:3000});
+      if(control==='sourceSilenced')brain.setSilenced(condition.source,true);
+      const target=control==='shuffledTarget'?shuffledTargets(spec.seed,new Set([...config.groups.mn9,...config.groups[condition.source]])):'mn9';
+      if(control!=='targetDisabled')brain.setModulators({[spec.condition]:{source:condition.source,target,impulse:condition.impulse,tauMs:condition.tauMs,thresholdShift:condition.thresholdShift}});
+      modulationRule={source:condition.source,target:target==='mn9'?'mn9':target.map(index=>String(brain.ids[index])),inputRateHz:condition.rateHz,impulse:condition.impulse,tauMs:condition.tauMs,thresholdShift:condition.thresholdShift,kind:'phenomenological threshold shift',control};
+    } else brain.setModulators({});
+    trial={id:records.length+1,offer:offer.name,condition:spec.condition||'baseline',conditionLabel:condition?.label||'baseline',control,sweetHz:offer.sweetHz,bitterHz:offer.bitterHz,startMs:0,durationMs:3000,acceptThreshold:.85,reactionMs:null,peakExtension:0,motorSpikes:0,seed,modulationRule};
+  }
+  function completeTrial() {
+    const result={...trial,decision:trial.peakExtension>=trial.acceptThreshold?'accept':'withhold',meanExtension:trial.extensionSum/(trial.samples||1),modulation:brain.modulationSnapshot(),sourceGroups:Object.fromEntries(Object.entries(config.groups).filter(([name])=>['daReward','daAversive','octopamine'].includes(name)).map(([name,indices])=>[name,indices.length])),modelVersion:'phenomenological-threshold-v1'};
+    records.push(result);lastTrial=result;trial=null;body.blockTaste=true;brain.clearInputPrograms();brain.setModulators({});
   }
   onmessage = e => {
     const a=e.data;
@@ -41,6 +83,8 @@ function experimentWorker(FlyBrain, FlyBody) {
       body.bitter=a.bitter;body.blockTaste=a.taste;
       brain.setClamped('mn9',a.motor);
     }
+    if(a.type==='trial'){beginTrial(a);return;}
+    if(a.type==='records'){postMessage({type:'records',records});return;}
     if(a.type==='pause'){paused=a.value;lastWall=performance.now();credit=0;report();}
     if(a.type==='reset'){initialize(a.seed);}
   };
@@ -52,10 +96,16 @@ function experimentWorker(FlyBrain, FlyBody) {
       const target=Math.min(1000,Math.floor(credit*10));
       for(let k=0;k<target;k++){
         if(k%100===0&&performance.now()-start>10)break;
-        brain.setRates(...body.sensoryRates());
+        brain.setRates(...(trial?[trial.sweetHz,trial.bitterHz]:body.sensoryRates()));
         const spikes=brain.step();let motor=0;
         for(const i of spikes){const row=watch[i];if(row>=0)raster.push([(brain.tick-1)*.1,row]);if(row>=42)motor++;}
         body.step(.1,motor);count++;
+        if(trial){
+          trial.motorSpikes+=motor;trial.peakExtension=Math.max(trial.peakExtension,body.extension);trial.extensionSum=(trial.extensionSum||0)+body.extension;trial.samples=(trial.samples||0)+1;
+          const elapsed=brain.tick*.1-trial.startMs;
+          if(trial.reactionMs===null&&body.extension>=trial.acceptThreshold)trial.reactionMs=elapsed;
+          if(elapsed>=trial.durationMs)completeTrial();
+        }
       }
       computeMs+=performance.now()-start;stepsSinceReport+=count;credit-=count*.1;
       // Discard excessive wall-time debt, never skip or alter neural steps.
@@ -68,6 +118,7 @@ function experimentWorker(FlyBrain, FlyBody) {
 
 async function startExperiment() {
   if(typeof FlyData==='undefined')throw new Error('The network file is missing. Extract the complete project first.');
+  if(typeof ModulationData==='undefined')throw new Error('The modulation-group file is missing. Extract the complete project first.');
   if(typeof DecompressionStream==='undefined')throw new Error('This browser needs DecompressionStream support. Open this file in an up-to-date Chrome, Safari or Firefox.');
   $('loading').textContent='Unpacking 127,400 neurons…';
   await new Promise(r=>setTimeout(r,0));
@@ -92,7 +143,7 @@ async function startExperiment() {
   worker.onerror=e=>showFailure(new Error(e.message));
   worker.onmessage=receive;
   trialSeed=crypto.getRandomValues(new Uint32Array(1))[0];
-  worker.postMessage({type:'init',buffer,meta,seed:trialSeed},[buffer]);
+  worker.postMessage({type:'init',buffer,meta,modulationData:ModulationData,seed:trialSeed},[buffer]);
   const ids=meta.groups.mn9.map(i=>meta.neurons[i].id);
   $('cells').replaceChildren(...ids.map((id,i)=>{
     const span=document.createElement('span');span.textContent=`MN9 ${i+1} · ${id}`;return span;
@@ -100,8 +151,9 @@ async function startExperiment() {
 }
 function receive(e) {
   const m=e.data;
+  if(m.type==='records'){downloadRecords(m.records);return;}
   if(m.type==='ready'){
-    ready=true;$('loading').hidden=true;for(const el of document.querySelectorAll('button,input'))el.disabled=false;
+    ready=true;$('loading').hidden=true;for(const el of document.querySelectorAll('button,input,select'))el.disabled=false;
     document.body.dataset.ready='true';return;
   }
   if(m.type!=='state')return;
@@ -132,6 +184,34 @@ function receive(e) {
   document.body.dataset.totalSpikes=String(m.brain.totalSpikes);
   document.body.dataset.mn9=m.mn9.map(x=>x.spikes).join(',');
   document.body.dataset.seed=String(m.seed);
+  renderTrial(m);
+}
+function renderTrial(m) {
+  const active=m.trial,last=m.lastTrial;
+  if(active){
+    $('offer-input').textContent=`${active.sweetHz}${active.bitterHz?` + ${active.bitterHz}`:''} Hz`;
+    const values=Object.entries(m.modulation||{}).map(([name,value])=>`${name} ${value.toFixed(2)}`);
+    $('modulator-state').textContent=values.join(' · ')||'baseline';
+    $('decision').textContent='running';$('reaction').textContent='—';
+    $('trial-seed').textContent=String(active.seed);
+    $('trial-note').textContent=active.modulationRule?`${active.conditionLabel}; ${active.modulationRule.source} → ${active.modulationRule.target}, ${active.modulationRule.inputRateHz} Hz, threshold shift ${active.modulationRule.thresholdShift}, τ ${active.modulationRule.tauMs} ms; control: ${active.control}. Assumption: ${active.modulationRule.kind}.`:`baseline; fixed ${active.durationMs/1000}s offer. Acceptance threshold: ${active.acceptThreshold}.`;
+  } else if(last){
+    $('offer-input').textContent=`${last.sweetHz}${last.bitterHz?` + ${last.bitterHz}`:''} Hz`;
+    $('modulator-state').textContent=Object.entries(last.modulation||{}).map(([name,value])=>`${name} ${value.toFixed(2)}`).join(' · ')||'baseline';
+    $('decision').textContent=last.decision;$('reaction').textContent=last.reactionMs===null?'—':`${Math.round(last.reactionMs)} ms`;
+    $('trial-seed').textContent=String(last.seed);
+    $('trial-note').textContent='Completed result is a model output under the displayed phenomenological assumptions.';
+  }
+  const log=$('trial-log');log.replaceChildren();
+  for(const row of [...(m.records||[])].reverse()){
+    const div=document.createElement('div');div.className='trial-row';
+    for(const value of [`#${row.id}`,row.offer,row.conditionLabel,row.decision,row.reactionMs===null?'—':`${Math.round(row.reactionMs)} ms`]){const span=document.createElement('span');span.textContent=value;div.append(span);}
+    log.append(div);
+  }
+}
+function downloadRecords(records) {
+  const blob=new Blob([JSON.stringify({format:'fly-feeding-state-trials-v1',modulationSource:ModulationData.source,limitations:ModulationData.limitations,records},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='fly-feeding-state-trials.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
 }
 function showFailure(error) {
   $('loading').hidden=false;$('loading').textContent=error.message;$('loading').classList.add('error');
@@ -152,6 +232,11 @@ $('reset').onclick=()=>{
   worker.postMessage({type:'reset',seed:trialSeed});
   rasterEvents=[];previewBody=new FlyBody();
 };
+$('run-offer').onclick=()=>{
+  trialSeed=crypto.getRandomValues(new Uint32Array(1))[0];
+  worker?.postMessage({type:'trial',offer:$('offer').value,condition:$('condition').value,control:$('state-control').value,seed:trialSeed});
+};
+$('download-trials').onclick=()=>worker?.postMessage({type:'records'});
 document.addEventListener('visibilitychange',()=>worker?.postMessage({type:'pause',value:document.hidden||paused}));
 let drag=false;
 $('fly').addEventListener('pointerdown',e=>{

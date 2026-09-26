@@ -35,6 +35,10 @@ class FlyBrain {
     this.randomState = seed >>> 0;
     this.rates = [0, 0];
     this.inputs = [groups.sweet || [], groups.bitter || []];
+    this.inputPrograms = {};
+    this.modulators = {};
+    this.modulatorSources = new Map();
+    this.modulationTarget = new Float64Array(this.size);
     for (const group of this.inputs) for (const i of group) this.refractory[i] = 0;
     this.a = Math.exp(-0.1 / 20);
     this.b = Math.exp(-0.1 / 5);
@@ -52,6 +56,57 @@ class FlyBrain {
   setRates(sweetHz, bitterHz) {
     this.rates[0] = Math.min(200, Math.max(0, Number(sweetHz) || 0));
     this.rates[1] = Math.min(200, Math.max(0, Number(bitterHz) || 0));
+  }
+  // Named stochastic inputs generalize the source model's two PoissonInput
+  // populations. They are external stimulation, never forced neural spikes.
+  setInputProgram(group, {rateHz = 0, startMs = 0, durationMs = Infinity, millivolts = 68.75} = {}) {
+    const indices = this.indices(group);
+    const rate = Math.min(200, Math.max(0, Number(rateHz) || 0));
+    if (!Number.isFinite(startMs) || !(Number.isFinite(durationMs) || durationMs === Infinity) || !Number.isFinite(millivolts)) throw new Error('Invalid input program');
+    this.inputPrograms[group] = {indices, rateHz: rate, startMs, durationMs, millivolts};
+    for (const i of indices) this.refractory[i] = 0;
+  }
+  clearInputPrograms() { this.inputPrograms = {}; }
+  // This is a deliberately phenomenological modulation layer. A source-group
+  // spike raises a decaying state; documented target coefficients shift that
+  // target's LIF threshold. It does not claim receptor-level physiology.
+  setModulators(config = {}) {
+    this.modulators = {};
+    this.modulatorSources = new Map();
+    this.modulationTarget.fill(0);
+    for (const [name, spec] of Object.entries(config)) {
+      const sources = this.indices(spec.source);
+      const targets = this.indices(spec.target);
+      const item = {sources, targets, impulse: Number(spec.impulse) || 0, tauMs: Math.max(.1, Number(spec.tauMs) || 500), thresholdShift: Number(spec.thresholdShift) || 0, value: 0};
+      this.modulators[name] = item;
+      for (const source of sources) {
+        const names = this.modulatorSources.get(source) || [];
+        names.push(name); this.modulatorSources.set(source, names);
+      }
+    }
+  }
+  modulationSnapshot() {
+    const result = {};
+    for (const [name, item] of Object.entries(this.modulators)) result[name] = item.value;
+    return result;
+  }
+  refreshModulationTargets() {
+    this.modulationTarget.fill(0);
+    for (const item of Object.values(this.modulators)) {
+      for (const target of item.targets) this.modulationTarget[target] += item.value * item.thresholdShift;
+    }
+  }
+  decayModulators() {
+    for (const item of Object.values(this.modulators)) item.value *= Math.exp(-.1 / item.tauMs);
+    this.refreshModulationTargets();
+  }
+  updateModulators(spikes) {
+    for (const source of spikes) for (const name of this.modulatorSources.get(source) || []) {
+      const item = this.modulators[name];
+      item.value = Math.min(1, item.value + item.impulse);
+    }
+    this.refreshModulationTargets();
+    for (const item of Object.values(this.modulators)) for (const target of item.targets) if (this.potentiallySpiking(target)) this.wake(target);
   }
   indices(group) {
     if (typeof group === 'string') {
@@ -88,7 +143,7 @@ class FlyBrain {
     this.updated[i] = completedStep;
   }
   potentiallySpiking(i) {
-    return Math.max(0, this.u[i]) + Math.max(0, this.g[i]) / 3 >= 7;
+    return Math.max(0, this.u[i]) + Math.max(0, this.g[i]) / 3 >= 7 - this.modulationTarget[i];
   }
   state(i) {
     this.evolve(i, this.tick);
@@ -121,6 +176,7 @@ class FlyBrain {
     const tick = this.tick, completed = tick + 1;
     const spikes = this.spikes;
     spikes.length = 0;
+    this.decayModulators();
     let retained = 0;
     // Brian2 groups -> thresholds. Awake cells use the exact linear step.
     const limit = this.activeCount;
@@ -134,7 +190,7 @@ class FlyBrain {
       }
       if (tick - this.lastSpike[i] >= this.refractory[i]) {
         this.evolve(i, completed);
-        if (this.u[i] > 7) {
+        if (this.u[i] > 7 - this.modulationTarget[i]) {
           spikes.push(i);
           this.lastSpike[i] = tick;
           this.counts[i]++;
@@ -168,6 +224,12 @@ class FlyBrain {
       const probability = this.rates[group] * 0.0001;
       for (const i of this.inputs[group]) if (this.random() < probability) this.inputKick(i, 68.75, tick);
     }
+    const timeMs = tick * .1;
+    for (const program of Object.values(this.inputPrograms)) {
+      if (timeMs < program.startMs || timeMs >= program.startMs + program.durationMs) continue;
+      const probability = program.rateHz * .0001;
+      for (const i of program.indices) if (this.random() < probability) this.inputKick(i, program.millivolts, tick);
+    }
     for (let p = 0; p < this.injected.length; p += 2) this.inputKick(this.injected[p], this.injected[p + 1], tick);
     this.injected.length = 0;
     const future = this.queue[(tick + 18) % 19];
@@ -177,6 +239,7 @@ class FlyBrain {
       this.updated[i] = completed;
       future.push(i);
     }
+    this.updateModulators(spikes);
     this.totalSpikes += spikes.length;
     this.windowSpikes += spikes.length;
     this.tick = completed;
