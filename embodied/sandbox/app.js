@@ -221,9 +221,9 @@ function newspaperTexture(headline = false) {
   };
   if (headline) {
     // Printed on a flush curved section of the roll, never on a detached sign.
-    x.fillStyle = '#221e1a'; x.textAlign = 'center'; x.font = '900 206px Georgia, serif';
-    x.fillText('CHANJS WON', 1024, 218, 1900);
-    x.font = 'bold 104px Georgia, serif'; x.fillText('FIREBIRD HACKATHON', 1024, 346, 1900);
+    x.fillStyle = '#221e1a'; x.textAlign = 'center'; x.font = '900 280px Georgia, serif';
+    x.fillText('FIREBIRD', 1024, 276, 1900);
+    x.font = 'bold 78px Georgia, serif'; x.fillText('CHANJS WON THE HACKATHON', 1024, 358, 1900);
     x.fillStyle = '#f65b28'; x.fillRect(72, 377, 1904, 12);
     x.drawImage(firebirdGlyph, 80, 413, 48, 48 * 284 / 218);
     x.drawImage(firebirdWordmark, 154, 430, 280, 280 * 20 / 97);
@@ -258,7 +258,8 @@ function paperGeometry(top, bottom, length, start = 0, arc = Math.PI * 2) {
     const fold = 1 + .012 * Math.sin(v * 18 + angle * 3);
     p.setX(i, p.getX(i) * 1.12 * fold); p.setZ(i, p.getZ(i) * .9 * fold);
     p.setY(i, p.getY(i) + .028 * Math.sin(angle * 5) * Math.pow(Math.abs(v - .5) * 2, 8));
-    uv.setXY(i, v, 1 - u);
+    // Rotate the print 180 degrees: read from the lower handle toward the raised tip.
+    uv.setXY(i, 1 - v, u);
   }
   geometry.computeVertexNormals();
   return geometry;
