@@ -21,7 +21,7 @@ Model details, data vs. assumptions, and findings are in [embodied/README.md](em
 ## Replicate (PowerShell, from a fresh clone)
 
 ```powershell
-git clone https://github.com/<you>/Chanjs.git
+git clone https://github.com/K4ryan/Chanjs.git
 cd Chanjs\embodied
 py -3.12 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt   # exact pinned environment
