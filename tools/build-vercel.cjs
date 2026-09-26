@@ -71,8 +71,8 @@ function vendorThree(root, output) {
 }
 
 function assetVersion(root, files) {
-  const critical = files.filter(file => /\.(js|mjs|css|svg|ttf|woff2)$/.test(file) &&
-    (file.startsWith('embodied/sandbox/') || file.startsWith('assets/brand/') || file.startsWith('assets/fonts/') || OPTIONAL_FILES.includes(file))).sort();
+  const critical = files.filter(file => /\.(js|mjs|css|svg|ttf|woff2|webp|avif|png|jpg|jpeg)$/.test(file) &&
+    (file.startsWith('embodied/sandbox/') || file.startsWith('assets/brand/') || file.startsWith('assets/loading/') || file.startsWith('assets/fonts/') || OPTIONAL_FILES.includes(file))).sort();
   const hash = createHash('sha256');
   for (const file of critical) hash.update(file).update('\0').update(fs.readFileSync(path.join(root, file))).update('\0');
   return hash.digest('hex').slice(0, 12);
@@ -95,11 +95,13 @@ function build(root, output) {
   const brandRefs = files.filter(file => file.startsWith('assets/brand/'))
     .flatMap(file => [file, `../../${file}`]);
   const fontRefs = files.filter(file => /\.(ttf|woff2)$/.test(file)).flatMap(file => [file, `../../${file}`]);
+  const loadingRefs = files.filter(file => file.startsWith('assets/loading/'))
+    .flatMap(file => [file, `../../${file}`]);
   // Brand marks also appear in slider CSS and the loader's JavaScript.
   for (const file of files.filter(file => /\.(css|js)$/.test(file))) {
     const target = path.join(output, file);
     const source = fs.readFileSync(target, 'utf8');
-    const updated = versionReferences(source, [...brandRefs, ...fontRefs, './replay.mjs', './preparation.mjs'], version);
+    const updated = versionReferences(source, [...brandRefs, ...fontRefs, ...loadingRefs, './replay.mjs', './preparation.mjs', './view-math.mjs'], version);
     if (source !== updated) fs.writeFileSync(target, updated);
   }
   const sandboxPath = path.join(output, 'embodied/sandbox/index.html');

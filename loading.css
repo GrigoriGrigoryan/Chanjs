@@ -117,20 +117,56 @@ html.chanj-loading-lock { overflow: hidden; }
 .chanj-loader[data-cinema="aim"] .cl-paper-motion { opacity: 1; transform: translate(20%, 22%) rotate(12deg); transition: transform 260ms cubic-bezier(.22,.68,.15,1), opacity 180ms; }
 .chanj-loader[data-cinema="strike"] .cl-paper-motion { opacity: 1; animation: cl-swat 380ms cubic-bezier(.65,0,.9,.38) both; }
 @keyframes cl-swat { from { transform: translate(20%, 22%) rotate(12deg); } to { transform: translate(-13%, -15%) rotate(0deg); } }
-.chanj-loader[data-cinema="impact"] .cl-paper-motion { opacity: 1; animation: cl-recoil 500ms cubic-bezier(.16,.65,.22,1) both; }
+.chanj-loader[data-cinema="impact"] .cl-paper-motion { opacity: 1; animation: cl-recoil 380ms cubic-bezier(.16,.65,.22,1) both; }
 @keyframes cl-recoil { 0%, 14% { transform: translate(-13%, -15%) rotate(0deg); opacity: 1; } 100% { transform: translate(25%, 32%) rotate(12deg); opacity: 0; } }
 .cl-splash { position: absolute; top: calc(50% + var(--cl-strike-y, -45px)); left: 50%; z-index: 4; width: clamp(170px, 22vw, 290px); transform: translate(-50%, -50%) scale(.05); opacity: 0; color: var(--cl-accent); pointer-events: none; }
 .cl-splash > svg { display: block; width: 100%; fill: currentColor; }
-.chanj-loader[data-cinema="impact"] .cl-splash { animation: cl-ink 550ms cubic-bezier(.2,.75,.18,1) both; }
+.chanj-loader[data-cinema="impact"] .cl-splash { animation: cl-ink 380ms cubic-bezier(.2,.75,.18,1) both; }
 @keyframes cl-ink { 0% { transform: translate(-50%, -50%) scale(.1); opacity: .8; } 24% { transform: translate(-50%, -50%) scale(1.12); opacity: .95; } 100% { transform: translate(-50%, -50%) scale(1); opacity: .18; } }
 .chanj-loader[data-cinema="impact"] .cl-fly > svg { opacity: 0; transform: scale(1.35, .15); }
 .chanj-loader[data-cinema="impact"] .cl-fly-wing, .chanj-loader[data-state="error"] .cl-fly-wing { animation: none; }
 .chanj-loader[data-cinema="aim"] .cl-orbit-line, .chanj-loader[data-cinema="strike"] .cl-orbit-line, .chanj-loader[data-cinema="impact"] .cl-orbit-line { opacity: 0; }
 .chanj-loader[data-cinema="impact"] .cl-readout { opacity: 0; filter: blur(3px); transform: translate(-50%, -53%) scale(.96); }
-.cl-welcome { position: absolute; left: 50%; top: 50%; z-index: 6; width: 100%; margin: 0; opacity: 0; transform: translate(-50%, -30%); text-align: center; font: 700 clamp(28px, 4vw, 58px)/1.06 "Chanj Space", Arial, sans-serif; letter-spacing: -.055em; pointer-events: none; }
-.cl-welcome span { color: var(--cl-muted); }
-.chanj-loader[data-cinema="impact"] .cl-welcome { animation: cl-welcome 650ms cubic-bezier(.16,.7,.15,1) 130ms both; }
-@keyframes cl-welcome { to { opacity: 1; transform: translate(-50%, -50%); } }
+/* The welcome card arrives only once both the opening and actual preparation are complete. */
+.cl-welcome {
+  position: absolute;
+  left: 50%; top: 50%; z-index: 6;
+  width: min(690px, calc(100% - 40px));
+  padding: clamp(25px, 4.3vw, 62px) 24px;
+  margin: 0;
+  opacity: 0;
+  transform: translate(-50%, -43%) scale(.965);
+  border: 1px solid #fff2;
+  border-radius: 30px;
+  background: linear-gradient(125deg, #ffffff12, #ffffff03 55%, #ffffff09);
+  box-shadow: inset 0 1px 0 #ffffff1c, 0 25px 80px #0002;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  text-align: center;
+  pointer-events: none;
+  filter: blur(6px);
+}
+.cl-welcome-kicker { display: block; color: var(--cl-muted); font: 500 9px/1.4 Avenir, Arial, sans-serif; letter-spacing: .2em; }
+.cl-welcome p { margin: 22px 0; font: 700 clamp(30px, 4.3vw, 62px)/1.08 "Chanj Space", Arial, sans-serif; letter-spacing: -.05em; }
+.cl-welcome strong { font-weight: 700; color: var(--cl-ink); }
+.cl-welcome-rule { display: block; height: 2px; width: 38px; margin: 0 auto; background: var(--cl-accent); border-radius: 2px; }
+.chanj-loader[data-cinema="welcome"] .cl-welcome { animation: cl-welcome 220ms cubic-bezier(.16,.7,.15,1) both; }
+@keyframes cl-welcome { to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } }
+.cl-preparing { display: none; margin: 22px auto 0; color: var(--cl-muted); font: 500 11px/1.6 Avenir, Arial, sans-serif; }
+.cl-busy-dot { display: inline-block; width: 5px; height: 5px; margin: 0 7px 2px 0; border-radius: 50%; background: var(--cl-accent); animation: cl-busy 1300ms ease-in-out infinite alternate; }
+@keyframes cl-busy { to { opacity: .25; } }
+.chanj-loader[data-cinema="waiting"] .cl-preparing { display: block; }
+.chanj-loader[data-cinema="waiting"] .cl-fly,
+.chanj-loader[data-cinema="welcome"] .cl-fly,
+.chanj-loader[data-cinema="waiting"] .cl-orbit-line,
+.chanj-loader[data-cinema="welcome"] .cl-orbit-line,
+.chanj-loader[data-cinema="waiting"] .cl-strike-origin,
+.chanj-loader[data-cinema="welcome"] .cl-strike-origin { display: none; }
+.chanj-loader[data-cinema="waiting"] .cl-readout { opacity: 1; filter: none; transform: translate(-50%, -50%); }
+.chanj-loader[data-cinema="welcome"] .cl-readout { opacity: 0; filter: blur(8px); transform: translate(-50%, -57%) scale(.94); }
+.chanj-loader[data-cinema="waiting"] .cl-splash,
+.chanj-loader[data-cinema="welcome"] .cl-splash { opacity: .06; transform: translate(-50%, -50%) scale(1); }
+.chanj-loader[data-cinema="welcome"] .cl-stage-label { opacity: 0; transition: opacity 240ms; }
 .cl-illustration { position: absolute; bottom: 18px; left: 0; width: 100%; margin: 0; color: var(--cl-muted); text-align: center; font-size: 9px; line-height: 1.5; opacity: .7; }
 .cl-bottom { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 26px; align-items: end; border-top: 1px solid var(--cl-line); padding-top: 23px; }
 .cl-copy h2 { margin: 0 0 14px; font: 700 clamp(18px, 2.3vw, 27px)/1.15 "Chanj Space", Arial, sans-serif; letter-spacing: -.035em; }
@@ -141,7 +177,7 @@ html.chanj-loading-lock { overflow: hidden; }
 .cl-time { display: grid; justify-items: end; gap: 7px; padding-bottom: 1px; }
 .cl-time > span { color: var(--cl-muted); font-size: 8px; line-height: 1; letter-spacing: .18em; }
 .cl-time output { font: 700 20px/1 "Chanj Space", Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
-.chanj-loader[data-mode="returning"] .cl-fly, .chanj-loader[data-mode="returning"] .cl-strike-origin, .chanj-loader[data-mode="returning"] .cl-splash, .chanj-loader[data-mode="returning"] .cl-orbit-line, .chanj-loader[data-mode="returning"] .cl-illustration { display: none; }
+.chanj-loader[data-mode="simple"] .cl-fly, .chanj-loader[data-mode="simple"] .cl-strike-origin, .chanj-loader[data-mode="simple"] .cl-splash, .chanj-loader[data-mode="simple"] .cl-orbit-line, .chanj-loader[data-mode="simple"] .cl-illustration { display: none; }
 .chanj-loader[data-state="error"] .cl-percent-unit { visibility: hidden; }
 .chanj-loader[data-state="error"] .cl-fly { opacity: .3; }
 .chanj-loader[data-state="error"] .cl-readout { opacity: .4; }
@@ -153,7 +189,8 @@ html.chanj-loading-lock { overflow: hidden; }
 .chanj-loader[data-motion="reduced"] .cl-strike-origin { display: none; }
 .chanj-loader[data-motion="reduced"] .cl-orbit-line { opacity: .35; }
 .chanj-loader[data-motion="reduced"][data-cinema="impact"] .cl-splash { animation: none; opacity: .18; transform: translate(-50%, -50%); }
-.chanj-loader[data-motion="reduced"][data-cinema="impact"] .cl-welcome { animation: none; opacity: 1; transform: translate(-50%, -50%); }
+.chanj-loader[data-motion="reduced"][data-cinema="welcome"] .cl-welcome { animation: none; opacity: 1; transform: translate(-50%, -50%); filter: none; }
+.chanj-loader[data-motion="reduced"] .cl-busy-dot { animation: none; }
 .chanj-loader[data-motion="reduced"] .cl-readout, .chanj-loader[data-motion="reduced"] .cl-fly > svg { transition: none; }
 @media (max-width: 600px) {
   .chanj-loader { padding: 18px; }
@@ -177,7 +214,10 @@ html.chanj-loading-lock { overflow: hidden; }
   .cl-time output { font-size: 18px; }
   .cl-actions { grid-column: 1 / -1; }
   .cl-actions:has(.cl-retry[hidden]) { display: none; }
-  .cl-welcome { font-size: clamp(30px, 8vw, 44px); }
+  .cl-welcome { width: 100%; padding: 30px 13px; border-radius: 23px; }
+  .cl-welcome p { font-size: clamp(29px, 7.8vw, 44px); margin: 21px 0; }
+  .cl-welcome-kicker { font-size: 8px; }
+  .cl-preparing { max-width: 205px; font-size: 10px; }
 }
 @media (max-height: 520px) and (min-width: 601px) {
   .chanj-loader { padding: 14px 24px; }
@@ -189,6 +229,8 @@ html.chanj-loading-lock { overflow: hidden; }
   .cl-illustration { bottom: 5px; }
   .cl-bottom { padding-top: 12px; }
   .cl-copy h2 { margin-bottom: 5px; font-size: 18px; }
+  .cl-welcome { width: min(580px, 90%); padding: 20px; }
+  .cl-welcome p { font-size: 35px; margin: 12px 0; }
   .cl-status { align-items: center; }
   .cl-phase { display: inline; margin-right: 7px; }
   .cl-detail { display: inline; font-size: 10px; }

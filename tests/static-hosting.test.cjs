@@ -49,8 +49,14 @@ test('root and nested sandbox entries resolve all assets without publishing feed
       .includes(`./replay.mjs?v=${result.version}`), 'The owned replay module shares the UI cache version');
     assert.ok(fs.readFileSync(path.join(output, 'embodied/sandbox/app.js'), 'utf8')
       .includes(`./preparation.mjs?v=${result.version}`), 'Preparation progress receives the same cache version');
+    assert.ok(fs.readFileSync(path.join(output, 'embodied/sandbox/app.js'), 'utf8')
+      .includes(`./view-math.mjs?v=${result.version}`), 'Camera math receives the same cache version');
+    assert.ok(fs.readFileSync(path.join(output, 'loading.js'), 'utf8')
+      .includes(`assets/loading/newspaper-hand.webp?v=${result.version}`), 'Replacement newspaper artwork invalidates cached art');
     assert.ok(fs.existsSync(path.join(output, 'assets/fonts/space-grotesk-bold.ttf')));
     assert.ok(fs.existsSync(path.join(output, 'assets/fonts/OFL.txt')), 'The font license ships with the font');
+    assert.ok(fs.existsSync(path.join(output, 'assets/fonts/PressStart2P-Regular.ttf')));
+    assert.ok(fs.existsSync(path.join(output, 'assets/fonts/PressStart2P-OFL.txt')), 'Arcade font license ships with the font');
     const loaderCss = fs.readFileSync(path.join(output, 'loading.css'), 'utf8');
     assert.ok(loaderCss.includes(`assets/fonts/space-grotesk-bold.ttf?v=${result.version}`),
       'The locally hosted intro font is content-versioned and resolves relative to the root stylesheet');
@@ -123,6 +129,12 @@ test('UI cache version is stable for identical content and changes after an asse
     assert.equal(assetVersion(fixture, [...files].reverse()), before, 'Input ordering does not affect the version');
     fs.writeFileSync(path.join(fixture, files[1]), 'body { color: white; }');
     assert.notEqual(assetVersion(fixture, files), before, 'Changing one owned stylesheet invalidates the UI version');
+    fs.mkdirSync(path.join(fixture, 'assets/loading'), {recursive: true});
+    const art = 'assets/loading/newspaper-hand.webp';
+    fs.writeFileSync(path.join(fixture, art), 'old newspaper');
+    const withArt = assetVersion(fixture, [...files, art]);
+    fs.writeFileSync(path.join(fixture, art), 'Firebird newspaper');
+    assert.notEqual(assetVersion(fixture, [...files, art]), withArt, 'Replacing newspaper art invalidates its cache URL');
   } finally { fs.rmSync(fixture, {recursive: true, force: true}); }
 });
 

@@ -23,7 +23,7 @@ const explanations = {
   },
   brain: {
     kicker: '02 / THE BRAIN', title: 'Signals become visible.',
-    content: '<p>The colored groups represent neural populations. Activity dots are sampled from measured firing rates; recorded runs use recorded spike counts.</p><p><strong>Decision focus</strong> highlights the populations used by the model’s approach/avoid readout.</p><p>Tap <strong>Neuron groups</strong> for mean rates, or <strong>Why this choice?</strong> for the decision pathway and its assumptions.</p>'
+    content: '<p>The colored groups represent neural populations. Activity dots are sampled from measured firing rates; recorded runs use recorded spike counts.</p><p><strong>Decision focus</strong> highlights the populations used by the model’s approach/avoid readout. Use <strong>Labels</strong> to show their names in the brain.</p><p>Tap a label to highlight that group, or choose one from <strong>Neuron groups</strong>. The remaining neurons stay visible for context. That panel also shows mean firing rates.</p><p><strong>Why this choice?</strong> explains the decision pathway and its assumptions.</p>'
   },
   modes: {
     kicker: 'WHAT IS RUNNING?', title: 'Two ways to explore.',
@@ -35,7 +35,7 @@ const explanations = {
   },
   newspaper: {
     kicker: 'A PLAYFUL LAYER', title: 'Watch the newspaper.',
-    content: '<p><strong>Newspaper mode</strong> shows food as fruit and danger as a newspaper. It adds collision and win/lose rules to the scene.</p><p>These are game rules layered over the model. Being caught by the newspaper is not a biological finding.</p><p>Tap <strong>Newspaper</strong> in the arena to toggle the mode. You can drag the newspaper and food to move them.</p>'
+    content: '<p><strong>Newspaper mode</strong> shows food as an apple or sugar cubes, and danger as a newspaper. It adds collision and win/lose rules to the scene.</p><p>Choose the food appearance in <strong>Controls → Arena</strong>. This changes the visual object only; the food signal and model stay the same.</p><p>These are game rules layered over the model. Being caught by the newspaper is not a biological finding.</p><p>Tap <strong>Newspaper</strong> in the arena to toggle the mode. You can drag the newspaper and food to move them.</p>'
   },
   gestures: {
     kicker: 'EXPLORE THE WORLD', title: 'A few small gestures.',
@@ -156,6 +156,7 @@ for (const button of document.querySelectorAll('[data-open-controls]')) button.a
 for (const button of document.querySelectorAll('[data-control-tab]')) button.addEventListener('click', () => showControlTab(button.dataset.controlTab));
 for (const button of document.querySelectorAll('[data-brain-tab]')) button.addEventListener('click', () => showBrainTab(button.dataset.brainTab));
 for (const button of document.querySelectorAll('[data-brain-panel]')) button.addEventListener('click', () => { showBrainTab(button.dataset.brainPanel); openDialog(brainDetails, button); });
+$('brain-group').addEventListener('change', () => { setView('brain'); closeDialog(brainDetails); });
 for (const button of document.querySelectorAll('[data-help]')) button.addEventListener('click', () => openHelp(button.dataset.help, button));
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => closeDialog(button.closest('dialog')));
 for (const dialog of document.querySelectorAll('dialog')) {

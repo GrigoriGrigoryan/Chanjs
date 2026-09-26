@@ -1,5 +1,6 @@
 /* CHANJ: a compact instrument for exploring a very small world. */
 /* Noir is the default; scientific group colors stay independent of the shell. */
+@font-face{font-family:"Chanjs Arcade";src:url("../../assets/fonts/PressStart2P-Regular.ttf") format("truetype");font-style:normal;font-weight:400;font-display:swap}
 :root{color-scheme:dark;--shell:#080809;--paper:#141315;--text:#eee8e1;--muted:#aaa2a2;--line:#ffffff18;--accent:#b9213d;--accent-label:#ee8395;--accent-soft:#31121c;--accent-ink:#f1d3da;--primary-ink:#fff6ed;--shadow:0 24px 80px #0008;--scene:#09080b;--head-h:72px;--nav-h:76px;--transport-h:118px;--safe-bottom:env(safe-area-inset-bottom,0px);--food:#ffad58;--danger:#78b9ed;--approach:#c6ff3c;--avoid:#ff6aab;--pam:#39be84;--ppl1:#ed5264;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-synthesis:none}
 :root[data-theme=burgundy]{--shell:#170b13;--paper:#25131f;--text:#f3e5df;--muted:#c2a7b0;--line:#f6bacb20;--accent:#751b3b;--accent-label:#e49bb3;--accent-soft:#421c2d;--accent-ink:#f5d5df;--scene:#120911;--shadow:0 24px 80px #0008}
 *{box-sizing:border-box}
@@ -56,7 +57,7 @@ body[data-view=brain] .scene-brain{display:block}
 .scene-tools{position:absolute;bottom:66px;left:14px;right:14px;display:flex;align-items:center;justify-content:center;gap:8px;z-index:2}
 .scene-tools button,.brain-actions button,#brain-tools button{color:var(--text);background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(16px)}
 .scene-tools button:hover,.brain-actions button:hover,#brain-tools button:hover{background:var(--accent-soft);border-color:var(--accent)}
-.scene-tools .on,#brain-tools .on{border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.scene-tools .on,#brain-tools .on,#brain-labels[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
 .newspaper-button{display:flex;align-items:center;gap:8px;white-space:nowrap;padding:10px 12px;font-size:11px;border-radius:24px}
 .camera-tools{display:flex;gap:4px}
 .scene-tools>.icon-button{margin-left:0}
@@ -76,6 +77,7 @@ body[data-view=brain] .scene-brain{display:block}
 .brain-actions svg{width:16px;height:16px;flex-basis:16px}
 .scene-caption{position:absolute;left:18px;top:70px;font:10px/1.5 ui-monospace,SFMono-Regular,monospace;color:var(--text);pointer-events:none}
 .scene-caption span{display:block;color:var(--muted);font-size:9px;font-family:inherit}
+/* Legacy rate overlays are replaced by the interactive .brain-label group names. */
 .blabel{display:none}
 
 /* Playback never disappears into a settings panel. */
@@ -204,13 +206,22 @@ input[type=range]::-moz-range-thumb{box-sizing:border-box;width:30px;height:30px
 .coachmark p{flex:1;min-width:0;font-size:12px;font-weight:550;margin:0}
 .coachmark p span{display:block;color:var(--muted);font-size:10px;font-weight:400;line-height:1.5;margin-top:3px}
 .coachmark>.icon-button{background:transparent;border:0;width:44px;height:44px}
-.game{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:24px;background:#0c080cd9;backdrop-filter:blur(9px);color:#fff6e9}
+.game{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;text-align:center;padding:14px;background:#090811e8;backdrop-filter:blur(8px);color:#fff0d5;overflow:auto}
 .game.hidden{display:none}
-.game-eyebrow{font-size:9px;letter-spacing:2px;color:var(--accent);margin-bottom:20px}
-.game-title{font-size:clamp(28px,7vw,60px);font-weight:550;letter-spacing:-2px;line-height:1.05}
-.game-sub{font-size:12px;line-height:1.7;color:#c5b7a9;margin:18px 0 24px}
-#game-again{min-width:160px;max-width:100%;font-size:12px}
-.game-hint{font-size:9px;line-height:1.7;max-width:30ch;color:#a39488;margin-top:20px}
+.game-card{--arcade-edge:#bb3855;--arcade-shadow:#602136;position:relative;display:flex;flex-direction:column;align-items:center;width:min(440px,100%);padding:24px 18px 22px;background:#191322;box-shadow:0 -4px 0 var(--arcade-edge),0 4px 0 var(--arcade-edge),-4px 0 0 var(--arcade-edge),4px 0 0 var(--arcade-edge),0 8px 0 var(--arcade-shadow),inset 0 0 0 2px #ffffff10}
+.game-card::before,.game-card::after{content:"";position:absolute;left:12px;right:12px;height:3px;background:repeating-linear-gradient(90deg,var(--arcade-edge) 0 4px,transparent 4px 8px);opacity:.6}
+.game-card::before{top:8px}.game-card::after{bottom:8px}
+.game-eyebrow{font:400 6px/1.8 "Chanjs Arcade",monospace;letter-spacing:0;color:#d5a5b4;margin-bottom:14px}
+.game-emblem{width:48px;height:34px;image-rendering:pixelated;flex-shrink:0;margin-bottom:14px;filter:drop-shadow(0 4px 0 #090710)}
+.pixel-star{display:none}.game[data-result=won] .pixel-star{display:block}.game[data-result=won] .pixel-fly{display:none}
+.game[data-result=won] .game-card{--arcade-edge:#d1ab45;--arcade-shadow:#61501e}
+.game-title{font:400 clamp(16px,2.35vw,28px)/1.5 "Chanjs Arcade",monospace;letter-spacing:0;color:#fff0d5;text-shadow:3px 3px 0 #743142;max-width:100%;text-wrap:balance}
+.game[data-result=won] .game-title{text-shadow:3px 3px 0 #756027}
+.game-sub{font:400 9px/1.85 "Chanjs Arcade",monospace;color:#dec4c8;margin:18px 0 20px}
+#game-again{min-width:180px;min-height:48px;max-width:100%;font:400 8px/1.8 "Chanjs Arcade",monospace;border:0;border-radius:0;padding:13px 12px;background:#c43d57;color:#fff5dd;box-shadow:0 -3px 0 #e8858e,0 4px 0 #6a223b,-3px 0 0 #8e2c46,3px 0 0 #8e2c46}
+#game-again:hover{background:#d34b63}#game-again:active{transform:translateY(2px)}
+.game[data-result=won] #game-again{background:#d2b650;color:#191321;box-shadow:0 -3px 0 #f2d875,0 4px 0 #766225,-3px 0 0 #a18532,3px 0 0 #a18532}
+.game-hint{font-size:10px;line-height:1.6;max-width:30ch;color:#c7afbb;margin-top:17px}
 @keyframes sheet-in{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
 @media(min-width:700px){
@@ -226,7 +237,7 @@ input[type=range]::-moz-range-thumb{box-sizing:border-box;width:30px;height:30px
   .brain-actions{bottom:27px}.brain-actions button{font-size:11px}
 }
 @media(min-width:1100px){
-  :root{--head-h:74px;--nav-h:0px;--transport-h:108px;--controls-w:290px;--views-width:calc(100vw - var(--controls-w) - 54px);--brain-width:max(220px,calc(var(--views-width) / 3.85));--arena-width:calc(var(--views-width) - var(--brain-width))}
+  :root{--head-h:74px;--nav-h:0px;--transport-h:108px;--controls-w:290px;--views-width:calc(100vw - var(--controls-w) - 54px);--brain-width:max(250px,calc(var(--views-width) * .32));--arena-width:calc(var(--views-width) - var(--brain-width))}
   body[data-playback=recorded]{--transport-h:144px}
   .app-header{padding:0 22px}.header-actions{gap:12px}.desktop-controls{display:none}
   .app{inset:calc(var(--head-h) + 4px) 14px 14px calc(var(--controls-w) + 28px);grid-template-columns:minmax(0,1fr) var(--brain-width);gap:12px}
@@ -308,3 +319,20 @@ input[type=range]::-moz-range-thumb{box-sizing:border-box;width:30px;height:30px
   .settings-footer{display:flex;gap:0;padding:8px 18px}
   .settings-footer>span{display:none}
 }
+
+/* Brain annotations stay in screen space; all scientific colors come from the runtime. */
+#brain-tools{display:flex;gap:6px;flex-wrap:wrap;top:108px;left:16px;right:16px}
+#brain-tools .compact-button{font-size:9px;min-height:44px;padding:8px 10px;gap:5px}
+.brain-label{pointer-events:none;transition:opacity .18s;z-index:1}
+.brain-label button{pointer-events:auto;min-width:44px;min-height:30px;border-radius:6px;padding:6px 9px;background:#080c14ed;border:1px solid var(--group-color,#bad3e4);box-shadow:0 2px 10px #0008;font:600 10px/1.35 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.1px;color:#f2f7fa;white-space:nowrap;text-shadow:0 1px #000;backdrop-filter:blur(8px)}
+.brain-label button::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--group-color,#bad3e4)}
+.brain-label.is-selected button{border-width:2px;box-shadow:0 0 0 2px #080c14,0 4px 18px #0009;color:#fff}
+.brain-label.is-muted{opacity:.36}.brain-label.is-muted:hover{opacity:1}
+.select-field{display:flex;flex-direction:column;gap:8px;margin:0 0 24px}
+.select-field>label{font-size:12px;font-weight:600;color:var(--text)}
+.select-field select{width:100%;min-width:0;min-height:46px;padding:10px 12px;border-radius:11px;border:1px solid var(--line);color:var(--text);background:var(--shell);font-size:12px;cursor:pointer}
+.select-field p{font-size:10px;line-height:1.6;color:var(--muted);margin:0}
+@media(min-width:1100px){#brain-tools{top:122px;left:18px;right:18px}.game{padding:24px 20px calc(var(--transport-h) + 30px)}.game-card{padding:27px 18px 24px}.game-title{font-size:clamp(16px,1.75vw,27px)}}
+@media(max-width:699px){.game{padding:10px}.game-card{padding:19px 12px 17px}.game-eyebrow{font-size:5px;margin-bottom:10px}.game-emblem{width:40px;height:28px;margin-bottom:10px}.game-title{font-size:16px}.game-sub{font-size:7px;line-height:1.8;margin:13px 0 16px}.game-hint{font-size:9px;line-height:1.5;margin-top:13px}#game-again{min-height:44px;font-size:7px}}
+@media(max-height:540px) and (max-width:1099px){#brain-tools{top:94px;left:16px;right:16px}.game{padding:12px 20px}.game-card{width:min(400px,100%);padding:20px 18px 18px}.game-emblem{display:none}.game-eyebrow{margin-bottom:12px}.game-title{font-size:21px}.game-sub{font-size:8px;line-height:1.7;margin:12px 0 15px}.game-hint{font-size:9px;line-height:1.4;margin-top:13px}#game-again{min-height:44px;font-size:7px}}
+@media(pointer:coarse),(max-width:1099px){.brain-label button{min-height:44px}}

@@ -1,4 +1,4 @@
-/* Measured preparation progress, then one readiness-gated CHANJS encounter. */
+/* A three-second illustrated opening; application readiness remains a separate gate. */
 (function () {
   'use strict';
   if (window.ChanjLoader) return;
@@ -6,13 +6,12 @@
   const assetBase = scriptUrl || new URL('loading.js', location.href);
   const artUrl = new URL('assets/loading/newspaper-hand.webp', assetBase).href;
   const markUrl = new URL('assets/brand/fly-eye.svg', assetBase).href;
-  const SEEN_KEY = 'chanjs-intro-v4';
-  const MIN_ORBIT_MS = 1200, AIM_MS = 260, HIT_MS = 380, INK_MS = 500, REVEAL_MS = 800;
+  const INTRO_MS = 3000, AIM_MS = 260, HIT_MS = 380, SETTLE_MS = 380, WELCOME_MS = 850, REVEAL_MS = 700;
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const defaults = { title: 'Preparing your world.', detail: 'Loading the experiment…', timeoutMs: 45000 };
   let root, dock, title, detail, phase, elapsed, dockTime, retryButton, flyNode, progressNode, numberNode;
-  let cycle = null, visible = false, pageSeen = false, waitingForBody = false, pendingOptions = null, returnFocus = null;
-  let pendingProgress = 0, geometry = { rx: 200, ry: 105, strikeY: -45 };
+  let cycle = null, visible = false, waitingForBody = false, pendingOptions = null, returnFocus = null;
+  let geometry = { rx: 200, ry: 105, strikeY: -45 };
 
   function currentTheme() {
     const selected = document.documentElement.dataset.theme;
@@ -26,24 +25,25 @@
     if (root) root.dataset.theme = currentTheme();
     if (dock) dock.dataset.theme = currentTheme();
   }
-  function hasSeenIntro() {
-    if (new URLSearchParams(location.search).get('intro') === '1') return false;
-    try { return pageSeen || localStorage.getItem(SEEN_KEY) === 'seen'; } catch (_) { return pageSeen; }
-  }
-  function rememberIntro() {
-    pageSeen = true;
-    try { localStorage.setItem(SEEN_KEY, 'seen'); } catch (_) {}
-  }
   function makeCycle(settings) {
-    let resolve;
+    let resolve, releaseHeavy;
     const promise = new Promise(done => { resolve = done; });
+    const heavyPromise = new Promise(done => { releaseHeavy = done; });
     return { ready: false, failed: false, ended: false, mounted: false, skipped: false,
-      returning: hasSeenIntro(), reduced: motionPreference.matches, scene: 'orbit', serial: 0,
-      measured: pendingProgress, displayed: 0, lastNumber: -1, pos: { x: 0, y: 0, angle: 90 },
-      startedAt: performance.now(), visibleAt: 0, readyAt: null, lastFrame: 0,
+      reduced: motionPreference.matches, scene: 'orbit', serial: 0, introDone: false, heavyReleased: false,
+      measured: 0, displayed: 0, lastNumber: -1, pos: { x: 0, y: 0, angle: 90 },
+      startedAt: performance.now(), visibleAt: 0, readyAt: null,
       retry: typeof settings.retry === 'function' ? settings.retry : null,
-      tick: 0, timeout: 0, raf: 0, phaseTimer: 0, exitTimer: 0, exitListener: null, promise, resolve };
+      tick: 0, timeout: 0, raf: 0, phaseTimer: 0, exitTimer: 0, exitListener: null,
+      promise, resolve, heavyPromise, releaseHeavy };
   }
+  function releaseHeavyWork(c) {
+    if (c.heavyReleased) return;
+    c.heavyReleased = true;
+    if (root) root.dataset.heavy = 'allowed';
+    c.releaseHeavy();
+  }
+  function beforeHeavyWork() { return cycle ? cycle.heavyPromise : Promise.resolve(); }
   function flyingFly() {
     return `<svg viewBox="0 0 180 150" aria-hidden="true" focusable="false" fill="none">
       <g stroke="#22201c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -65,7 +65,7 @@
     return `<svg class="cl-paper-fallback" viewBox="0 0 1200 800" aria-hidden="true"><g transform="translate(156 120) rotate(-42)">
       <path d="M-55 0H55L66 560Q0 590-60 560Z" fill="#e9dfc8" stroke="#39302b" stroke-width="3"/>
       <ellipse rx="55" ry="22" fill="#c7b99f" stroke="#39302b" stroke-width="3"/><ellipse rx="32" ry="10" fill="#50473d"/>
-      <path d="M-38 80h76v85h-76z" fill="#403a33"/><path d="M-38 205h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78" stroke="#655d4f" stroke-width="5"/>
+      <text x="0" y="82" text-anchor="middle" fill="#27211f" font-family="Georgia, serif" font-weight="700" font-size="26">Firebird</text><path d="M-39 96h78" stroke="#403a33" stroke-width="3"/><text x="0" y="122" text-anchor="middle" fill="#27211f" font-family="Arial, sans-serif" font-weight="700" font-size="11"><tspan x="0">CHANJS WINS</tspan><tspan x="0" dy="17">FIREBIRD</tspan><tspan x="0" dy="17">HACKATHON</tspan></text><path d="M-38 205h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78" stroke="#655d4f" stroke-width="5"/>
       </g></svg>`;
   }
   function inkSplash() {
@@ -76,13 +76,13 @@
     root = document.createElement('section'); root.className = 'chanj-loader'; root.hidden = true;
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'cl-title');
     root.innerHTML = `<header class="cl-top"><span class="cl-brand"><img class="cl-brand-mark" alt="" width="28" height="28">CHANJS<span class="cl-brand-note">BRAIN / BODY / WORLD</span></span><button type="button" class="cl-hide">Skip intro <span aria-hidden="true">↗</span></button></header>
-      <div class="cl-stage"><p class="cl-stage-label">A SMALLER WORLD IS TAKING SHAPE</p>
+      <div class="cl-stage"><p class="cl-stage-label">THE CHANJS SIMULATION</p>
         <div class="cl-orbit-line" aria-hidden="true"></div>
-        <div class="cl-readout"><div class="cl-progress" role="progressbar" aria-label="Experiment preparation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="cl-number" aria-hidden="true">00</span><span class="cl-percent-unit" aria-hidden="true">%</span></div><p class="cl-progress-label">PREPARING YOUR WORLD</p></div>
+        <div class="cl-readout"><div class="cl-progress" role="progressbar" aria-label="Illustrated opening progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="cl-number" aria-hidden="true">00</span><span class="cl-percent-unit" aria-hidden="true">%</span></div><p class="cl-progress-label">INTRO · 3 SECONDS</p><p class="cl-preparing"><span class="cl-busy-dot" aria-hidden="true"></span>Opening complete · preparing simulation</p></div>
         <div class="cl-fly" aria-hidden="true">${flyingFly()}</div>
         <div class="cl-strike-origin" aria-hidden="true"><div class="cl-paper-motion">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="high"></div></div>
         <div class="cl-splash" aria-hidden="true">${inkSplash()}</div>
-        <p class="cl-welcome" aria-hidden="true">Welcome to<br><span>a smaller world.</span></p>
+        <div class="cl-welcome" aria-hidden="true"><span class="cl-welcome-kicker">BRAIN / BODY / WORLD</span><p>Welcome to the<br><strong>Chanjs simulation.</strong></p><span class="cl-welcome-rule"></span></div>
         <p class="cl-illustration">Illustrated introduction</p>
       </div>
       <footer class="cl-bottom"><div class="cl-copy"><h2 id="cl-title"></h2><div class="cl-status"><span class="cl-status-mark" aria-hidden="true"></span><div><p class="cl-phase">LOADING</p><p class="cl-detail" role="status" aria-live="polite" aria-atomic="true"></p></div></div></div><div class="cl-actions"><button type="button" class="cl-retry" hidden>Retry loading <span aria-hidden="true">↗</span></button></div><div class="cl-time"><span>ELAPSED</span><output role="timer" aria-live="off">00:00</output></div></footer>`;
@@ -132,7 +132,7 @@
   }
   function updateTime() { if (root && cycle) elapsed.textContent = dockTime.textContent = formatTime(cycle); }
   function clearLoadTimers(c) { clearInterval(c.tick); clearTimeout(c.timeout); c.tick = c.timeout = 0; }
-  function stopFrame(c) { cancelAnimationFrame(c.raf); c.raf = 0; c.lastFrame = 0; }
+  function stopFrame(c) { cancelAnimationFrame(c.raf); c.raf = 0; }
   function cancelExit(c) {
     clearTimeout(c.exitTimer); c.exitTimer = 0;
     if (root && c.exitListener) root.removeEventListener('transitionend', c.exitListener);
@@ -150,16 +150,12 @@
     if (c.failed) {
       c.lastNumber = -1; delete root.dataset.percent; numberNode.textContent = '—'; progressNode.removeAttribute('aria-valuenow'); progressNode.setAttribute('aria-valuetext', 'Loading stopped'); return;
     }
-    const value = Math.min(c.ready ? 100 : 99, Math.floor(c.displayed * 100 + .000001));
+    const value = Math.min(100, Math.floor(c.displayed * 100 + .000001));
     if (value !== c.lastNumber) {
       c.lastNumber = value; numberNode.textContent = String(value).padStart(2, '0');
       progressNode.setAttribute('aria-valuenow', String(value)); progressNode.removeAttribute('aria-valuetext');
       root.dataset.percent = String(value);
     }
-  }
-  function target(c) {
-    const orbitPending = !c.returning && !c.reduced && !c.skipped && performance.now() - c.visibleAt < MIN_ORBIT_MS;
-    return c.ready && !orbitPending ? 1 : Math.min(.99, c.measured);
   }
   function putFly(c, x, y, angle) {
     c.pos = { x, y, angle };
@@ -168,28 +164,31 @@
   function tickFrame(c, now) {
     c.raf = 0;
     if (cycle !== c || c.ended || c.failed || !c.mounted || !visible) return;
-    const dt = c.lastFrame ? Math.min(80, Math.max(0, now - c.lastFrame)) : 16; c.lastFrame = now;
-    const t = target(c), gap = t - c.displayed;
-    c.displayed = Math.min(t, c.displayed + Math.max(0, gap) * (1 - Math.exp(-dt / 150)));
-    if (gap < (c.ready ? .001 : .0001)) c.displayed = t;
+    const age = Math.max(0, now - c.visibleAt);
+    if (!c.introDone) c.displayed = Math.min(1, age / INTRO_MS);
     renderProgress(c);
-    if (!c.returning && !c.reduced && c.scene === 'orbit') {
-      const angle = (now - c.visibleAt) / 1700 * Math.PI * 2 - Math.PI * .85;
+    if (!c.reduced && c.scene === 'orbit') {
+      const angle = age / 1700 * Math.PI * 2 - Math.PI * .85;
       const x = Math.cos(angle) * geometry.rx, y = Math.sin(angle) * geometry.ry;
       putFly(c, x, y, Math.atan2(Math.cos(angle) * geometry.ry, -Math.sin(angle) * geometry.rx) * 180 / Math.PI + 90);
-    } else if (c.scene === 'aim') {
-      const t = Math.min(1, (now - c.aimStart) / AIM_MS), eased = 1 - Math.pow(1 - t, 3);
+      if (age >= INTRO_MS - AIM_MS) {
+        c.scene = 'aim'; c.aimFrom = { ...c.pos }; root.dataset.cinema = 'aim';
+      }
+    }
+    if (c.scene === 'aim') {
+      const t = Math.min(1, Math.max(0, (age - (INTRO_MS - AIM_MS)) / AIM_MS)), eased = 1 - Math.pow(1 - t, 3);
       putFly(c, c.aimFrom.x * (1 - eased), c.aimFrom.y + (geometry.strikeY - c.aimFrom.y) * eased, c.aimFrom.angle + (12 - c.aimFrom.angle) * eased);
     }
-    advance(c, now);
-    if (!c.ended && !c.failed && visible && c.scene !== 'revealing') c.raf = requestAnimationFrame(time => tickFrame(c, time));
+    if (!c.introDone && age >= INTRO_MS && (c.scene === 'orbit' || c.scene === 'aim')) beginStrike(c);
+    advance(c);
+    if (!c.ended && !c.failed && visible && ['orbit', 'aim'].includes(c.scene)) c.raf = requestAnimationFrame(time => tickFrame(c, time));
   }
   function startFrame(c) { if (!c.raf && c.mounted && !c.failed && !c.ended && visible) c.raf = requestAnimationFrame(time => tickFrame(c, time)); }
   function complete(c) {
     if (cycle !== c || c.ended || !c.ready || c.failed) return;
     const hadFocus = visible && root && root.contains(document.activeElement);
     clearLoadTimers(c); stopFrame(c); stopCinema(c);
-    visible = false; c.ended = true; rememberIntro();
+    visible = false; c.ended = true; releaseHeavyWork(c);
     if (root) root.hidden = dock.hidden = true;
     document.documentElement.classList.remove('chanj-loading-lock'); if (hadFocus) restoreFocus();
     c.resolve();
@@ -204,25 +203,36 @@
     root.addEventListener('transitionend', c.exitListener);
     c.exitTimer = window.setTimeout(() => { if (c.serial === serial) complete(c); }, duration + 80);
   }
+  function openingComplete(c) {
+    if (c.failed || c.ended) return;
+    c.introDone = true; c.displayed = 1; c.scene = 'waiting'; stopFrame(c);
+    root.dataset.cinema = 'waiting'; root.dataset.introComplete = 'true'; root.querySelector('.cl-progress-label').textContent = 'INTRO COMPLETE'; renderProgress(c);
+    releaseHeavyWork(c); advance(c);
+  }
   function impact(c) {
-    if (!c.ready || c.failed) return;
+    if (c.failed || c.ended) return;
     c.scene = 'impact'; root.dataset.cinema = 'impact'; putFly(c, 0, geometry.strikeY, 12);
-    rememberIntro();
-    later(c, () => beginExit(c, c.reduced ? 0 : REVEAL_MS), c.reduced ? 160 : INK_MS);
+    later(c, () => openingComplete(c), SETTLE_MS);
   }
   function beginStrike(c) {
-    c.scene = 'aim'; c.aimStart = performance.now(); c.aimFrom = { ...c.pos }; root.dataset.cinema = 'aim';
-    later(c, () => {
-      c.scene = 'strike'; root.dataset.cinema = 'strike'; putFly(c, 0, geometry.strikeY, 12);
-      later(c, () => impact(c), HIT_MS);
-    }, AIM_MS);
+    c.displayed = 1; renderProgress(c); c.scene = 'strike'; root.dataset.cinema = 'strike';
+    putFly(c, 0, geometry.strikeY, 12); stopFrame(c);
+    later(c, () => impact(c), HIT_MS);
   }
-  function advance(c, now) {
-    if (!c.mounted || c.ended || c.failed || !c.ready) return;
-    if (c.skipped || !visible) { c.displayed = 1; renderProgress(c); complete(c); return; }
-    if (c.returning && c.scene === 'orbit') { c.displayed = 1; renderProgress(c); beginExit(c, c.reduced ? 0 : 180); return; }
-    if (c.reduced && c.scene === 'orbit') { c.displayed = 1; renderProgress(c); impact(c); return; }
-    if (c.scene === 'orbit' && c.displayed === 1 && now - c.visibleAt >= MIN_ORBIT_MS) beginStrike(c);
+  function welcome(c) {
+    if (!c.ready || c.failed || !c.introDone || ['welcome', 'revealing'].includes(c.scene)) return;
+    c.scene = 'welcome'; root.dataset.cinema = 'welcome'; stopFrame(c);
+    later(c, () => beginExit(c, c.reduced ? 0 : REVEAL_MS), c.reduced ? 160 : WELCOME_MS);
+  }
+  function advance(c) {
+    if (!c.mounted || c.ended || c.failed) return;
+    if (c.skipped || !visible) {
+      releaseHeavyWork(c);
+      if (c.ready) complete(c);
+      return;
+    }
+    if (c.reduced && !c.introDone) openingComplete(c);
+    if (c.ready && c.introDone) welcome(c);
   }
   function reveal() {
     const c = cycle; if (!c || c.ended || !root) return;
@@ -232,9 +242,9 @@
   }
   function hide() {
     const c = cycle; if (!c || c.ended) return;
-    c.skipped = true; c.returning = true; stopCinema(c); stopFrame(c); rememberIntro();
-    c.scene = 'orbit'; visible = false;
-    if (root) { root.dataset.mode = 'returning'; root.dataset.cinema = 'orbit'; root.hidden = true; dock.hidden = false; }
+    c.skipped = true; c.introDone = true; c.displayed = 1; stopCinema(c); stopFrame(c); releaseHeavyWork(c);
+    c.scene = 'waiting'; visible = false;
+    if (root) { root.dataset.mode = 'simple'; root.dataset.cinema = 'waiting'; root.hidden = true; dock.hidden = false; }
     document.documentElement.classList.remove('chanj-loading-lock'); restoreFocus(); advance(c, performance.now());
   }
   function armLoading(c, timeoutMs) {
@@ -251,8 +261,8 @@
     mount(); syncTheme(); c.mounted = true; c.visibleAt = performance.now();
     if (typeof settings.retry === 'function') c.retry = settings.retry;
     root.dataset.state = c.failed ? 'error' : (c.ready ? 'ready' : 'loading');
-    root.dataset.mode = c.returning ? 'returning' : 'cinematic'; root.dataset.motion = c.reduced ? 'reduced' : 'full'; root.dataset.cinema = 'orbit';
-    delete root.dataset.exiting; root.setAttribute('aria-busy', c.ready ? 'false' : 'true');
+    root.dataset.mode = 'cinematic'; root.dataset.heavy = c.heavyReleased ? 'allowed' : 'deferred'; delete root.dataset.introComplete; root.dataset.motion = c.reduced ? 'reduced' : 'full'; root.dataset.cinema = 'orbit';
+    delete root.dataset.exiting; root.querySelector('.cl-progress-label').textContent = 'INTRO · 3 SECONDS'; root.setAttribute('aria-busy', c.ready ? 'false' : 'true');
     title.textContent = settings.title; detail.textContent = c.ready ? 'Your world is ready.' : settings.detail;
     phase.textContent = c.failed ? 'LOADING STOPPED' : (c.ready ? 'READY' : 'LOADING');
     retryButton.hidden = !c.failed; dock.querySelector('.cl-dock-text').textContent = 'Loading continues'; returnFocus = document.activeElement;
@@ -262,7 +272,7 @@
   }
   function show(options) {
     const settings = Object.assign({}, defaults, options || {});
-    if (!cycle || cycle.ended) { cycle = makeCycle(settings); pendingProgress = 0; }
+    if (!cycle || cycle.ended) cycle = makeCycle(settings);
     const c = cycle;
     if (!document.body) {
       pendingOptions = settings;
@@ -277,9 +287,9 @@
   }
   function resetForRetry(c) {
     stopCinema(c); stopFrame(c); clearLoadTimers(c);
-    c.ready = c.failed = c.skipped = false; c.readyAt = null; c.returning = true; c.scene = 'orbit';
-    c.measured = c.displayed = 0; c.lastNumber = -1; c.startedAt = performance.now();
-    root.dataset.mode = 'returning'; root.dataset.cinema = 'orbit'; root.dataset.state = 'loading'; root.setAttribute('aria-busy', 'true');
+    c.ready = c.failed = c.skipped = false; c.readyAt = null; c.introDone = true; c.scene = 'waiting';
+    c.measured = 0; c.displayed = 1; releaseHeavyWork(c); c.lastNumber = -1; c.startedAt = performance.now();
+    root.dataset.mode = 'simple'; root.dataset.cinema = 'waiting'; root.dataset.introComplete = 'true'; root.querySelector('.cl-progress-label').textContent = 'INTRO COMPLETE'; root.dataset.state = 'loading'; root.setAttribute('aria-busy', 'true');
     retryButton.hidden = true; phase.textContent = 'TRYING AGAIN'; detail.textContent = 'Preparing the experiment…';
     dock.querySelector('.cl-dock-text').textContent = 'Loading continues'; reveal(); updateTime(); renderProgress(c); armLoading(c, defaults.timeoutMs);
   }
@@ -288,11 +298,9 @@
     if (cycle && !cycle.ended && !cycle.ready && detail) detail.textContent = String(message);
   }
   function progress(fraction) {
-    if (typeof fraction !== 'number' || !Number.isFinite(fraction)) return;
-    const value = Math.max(0, Math.min(1, fraction));
-    if (!cycle || cycle.ended) { pendingProgress = Math.max(pendingProgress, value); return; }
-    if (cycle.failed || cycle.ready) return;
-    cycle.measured = Math.max(cycle.measured, value); startFrame(cycle);
+    // Compatibility for callers reporting resources: this is deliberately not the intro clock.
+    if (!cycle || cycle.ended || cycle.failed || typeof fraction !== 'number' || !Number.isFinite(fraction)) return;
+    cycle.measured = Math.max(cycle.measured, Math.max(0, Math.min(1, fraction)));
   }
   function finish() {
     if (!cycle) return Promise.resolve();
@@ -305,7 +313,7 @@
   function fail(message, retry) {
     if (!cycle || cycle.ended) show({ title: 'A connection is missing.', detail: message });
     const c = cycle; c.ready = false; c.failed = true; c.readyAt = performance.now();
-    clearLoadTimers(c); stopCinema(c); stopFrame(c); c.scene = 'paused'; c.retry = typeof retry === 'function' ? retry : null;
+    clearLoadTimers(c); stopCinema(c); stopFrame(c); c.scene = 'paused'; releaseHeavyWork(c); c.retry = typeof retry === 'function' ? retry : null;
     if (!root) { pendingOptions = Object.assign({}, pendingOptions || defaults, { detail: String(message) }); return; }
     root.dataset.state = 'error'; root.dataset.cinema = 'paused'; root.setAttribute('aria-busy', 'false'); phase.textContent = 'LOADING STOPPED';
     detail.textContent = String(message || 'The experiment could not load. Please retry.'); retryButton.hidden = false; updateTime(); renderProgress(c);
@@ -314,9 +322,9 @@
   }
   motionPreference.addEventListener('change', event => {
     if (!event.matches || !cycle || cycle.ended) return;
-    cycle.reduced = true; stopCinema(cycle); cycle.scene = 'orbit';
-    if (root) { root.dataset.motion = 'reduced'; root.dataset.cinema = 'orbit'; }
+    cycle.reduced = true; stopCinema(cycle); cycle.scene = 'waiting'; cycle.introDone = false;
+    if (root) { root.dataset.motion = 'reduced'; root.dataset.cinema = 'waiting'; }
     advance(cycle, performance.now()); startFrame(cycle);
   });
-  window.ChanjLoader = Object.freeze({ show, update, progress, finish, fail, hide });
+  window.ChanjLoader = Object.freeze({ show, update, progress, beforeHeavyWork, finish, fail, hide });
 }());

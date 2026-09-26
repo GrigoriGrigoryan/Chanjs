@@ -7,6 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { poseFrameAt, recordingPath } from './replay.mjs';
 import { preparationProgress } from './preparation.mjs';
+import { fitBrainBounds, boundedArenaTarget } from './view-math.mjs';
 
 const $ = id => document.getElementById(id);
 const STATIC_HOSTING = window.CHANJ_STATIC_HOSTING === true;
@@ -22,10 +23,20 @@ preparationSteps.push('scene', 'frame');
 const prepared = preparationProgress(preparationSteps, fraction => window.ChanjLoader?.progress?.(fraction));
 if (!STATIC_HOSTING && document.querySelector('.back-link')) document.querySelector('.back-link').href = '/feeding/';
 const loadNote = text => window.ChanjLoader?.update(text);
-const bin = (u, T) => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); }).then(b => { const data = new T(b); prepared(u); return data; });
-const json = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); }).then(data => { prepared(u); return data; });
+const fetchBytes = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); });
+// Network transfer overlaps the opening; JSON/typed-array/geometry work waits for its gate.
+const initialBytes = new Map(preparationSteps.filter(u => !['scene', 'frame'].includes(u)).map(u => {
+  const request = fetchBytes(u); request.catch(() => {}); return [u, request];
+}));
+const takeBytes = u => { const request = initialBytes.get(u); initialBytes.delete(u); return request || fetchBytes(u); };
+const bin = (u, T) => takeBytes(u).then(b => { const data = new T(b); prepared(u); return data; });
+const json = u => takeBytes(u).then(b => { const data = JSON.parse(new TextDecoder().decode(b)); prepared(u); return data; });
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const DEFAULT_FOOD = [30, 0], DEFAULT_DANGER = [15, 0];
+
+// Let the timed opening finish before CPU/GPU preparation. Readiness still gates reveal.
+await window.ChanjLoader?.beforeHeavyWork?.();
+const yieldToPresentation = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // ---------------------------------------------------------------- assets
 loadNote('Loading the NeuroMechFly body and FlyWire neuron positions…');
@@ -38,12 +49,12 @@ const R = meta.reflex, MOT = meta.motion, G = meta.walk.geoms, NN = ngrp.length;
 const groupSize = meta.legend.map(l => l.count);
 
 // ---------------------------------------------------------------- renderer helper
-function makeView(el, { bloom, bg, zUp }) {
+function makeView(el, { bloom, bg, zUp, brain = false }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia('(max-width: 760px)').matches ? 1.25 : 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, brain ? 2 : (matchMedia('(max-width: 760px)').matches ? 1.25 : 1.5)));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !brain;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   el.prepend(renderer.domElement);
   renderer.domElement.addEventListener('webglcontextlost', e => {     // driver reset -> recover instead of staying black
@@ -53,34 +64,41 @@ function makeView(el, { bloom, bg, zUp }) {
   });
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(bg);
-  const camera = new THREE.PerspectiveCamera(42, 1, 0.2, 800);   // tight near/far = precise depth, no z-fighting
+  const camera = new THREE.PerspectiveCamera(42, 1, brain ? .05 : .2, brain ? 250 : 1500);   // tight near/far = precise depth, no z-fighting
   if (zUp) camera.up.set(0, 0, 1);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), ...bloom);
-  composer.addPass(bloomPass);
-  composer.addPass(new OutputPass());
+  // Draw neural points directly into the antialiased canvas: no low-resolution
+  // bloom targets washing the individual cells into a muddy glow.
+  const composer = brain ? {render: () => renderer.render(scene, camera), setSize() {}} : new EffectComposer(renderer);
+  if (!brain) {
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), ...bloom));
+    composer.addPass(new OutputPass());
+  }
+  const view = {renderer, scene, camera, controls, composer, onResize: null};
   const resize = () => {
     const w = el.clientWidth, h = el.clientHeight;
     if (!w || !h) return;                  // collapsed panel
     renderer.setSize(w, h, false); composer.setSize(w, h);
     camera.aspect = w / h;
     // Keep the subject in frame in tall mobile panes; this changes only the view.
-    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(21)) / Math.min(1, camera.aspect)));
+    camera.fov = brain ? 42 : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(21)) / Math.min(1, camera.aspect)));
     camera.updateProjectionMatrix();
+    view.onResize?.(w, h);
   };
   new ResizeObserver(resize).observe(el); resize();
-  return { renderer, scene, camera, controls, composer };
+  return view;
 }
 
 // ================================================================ ARENA
 const A = makeView($('arena'), { bloom: [0.55, 0.5, 0.82], bg: 0x070b14, zUp: true });
-A.scene.fog = new THREE.FogExp2(0x070b14, 0.0085);
+A.scene.fog = new THREE.Fog(0x070b14, 350, 850);
 A.camera.position.set(-9, -13, 9);
 A.controls.target.set(0, 0, 1);
-A.controls.maxPolarAngle = Math.PI * 0.49;
+A.controls.minDistance = 8; A.controls.maxDistance = 260;
+A.controls.minPolarAngle = .1; A.controls.maxPolarAngle = Math.PI * .47;
+A.controls.screenSpacePanning = false;
 
 const hemi = new THREE.HemisphereLight(0xa9cfff, 0x20160c, 0.7); hemi.position.set(0, 0, 1); A.scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
@@ -90,7 +108,7 @@ sun.shadow.bias = -0.0004; sun.shadow.radius = 4;
 A.scene.add(sun, sun.target);
 
 // ground: shaded floor + additive odor field / grid overlay
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x10141d, roughness: .92 }));
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.MeshStandardMaterial({ color: 0x10141d, roughness: .92 }));
 floor.receiveShadow = true; A.scene.add(floor);
 const odorMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -111,7 +129,7 @@ const odorMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, 1.);
     }`
 });
-const odorPlane = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), odorMat);
+const odorPlane = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), odorMat);
 odorPlane.position.z = 0.02; A.scene.add(odorPlane);
 
 // food: glowing fruit + reach ring
@@ -169,28 +187,42 @@ function makeApple() {
   return g;
 }
 function newspaperTexture() {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+  // The outer roll's UVs map x along its length, so headlines retain newspaper
+  // proportions instead of being stretched around the cylinder circumference.
+  const c = document.createElement('canvas'); c.width = 4096; c.height = 2048;
   const x = c.getContext('2d');
-  x.fillStyle = '#ece6d6'; x.fillRect(0, 0, 1024, 512);
-  x.fillStyle = '#1b1b1b'; x.font = 'bold 64px Georgia, serif'; x.fillText('THE DAILY FLY', 40, 80);
-  x.fillRect(40, 96, 944, 4);
-  x.font = 'bold 30px Georgia, serif'; x.fillText('Dopamine: the brain chemical behind every snack', 40, 142);
-  for (let col = 0; col < 4; col++) for (let row = 0; row < 15; row++) {
-    const w = 200 - (row % 5 === 4 ? 70 : Math.random() * 20);
-    x.fillStyle = `rgba(30,30,30,${.55 + Math.random() * .3})`; x.fillRect(40 + col * 240, 170 + row * 21, w, 7);
+  x.fillStyle = '#eee7d6'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#17130f'; x.textAlign = 'center';
+  x.font = '900 300px Georgia, serif'; x.fillText('FIREBIRD', 2048, 570, 3820);
+  x.fillRect(150, 620, 3796, 14);
+  x.font = 'bold 180px Georgia, serif'; x.fillText('CHANJS WINS', 2048, 825, 3780);
+  x.fillText('FIREBIRD HACKATHON', 2048, 1025, 3780);
+  x.font = '44px Georgia, serif'; x.fillText('A SMALL BRAIN. A BIG WORLD.  •  SPECIAL EDITION', 2048, 1190);
+  x.fillRect(150, 1240, 3796, 8);
+  for (let col = 0; col < 6; col++) for (let row = 0; row < 18; row++) {
+    x.fillStyle = '#62594d';
+    const w = row % 5 === 4 ? 410 : 550 - (row * 17 + col * 23) % 45;
+    x.fillRect(155 + col * 632, 1310 + row * 35, w, 10);
   }
-  x.fillStyle = '#9a9488'; x.fillRect(760, 170, 200, 130);
-  x.fillStyle = '#5b574f'; x.beginPath(); x.arc(860, 235, 40, 0, 7); x.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = A.renderer.capabilities.getMaxAnisotropy();
   return t;
+}
+function paperGeometry(radius, length) {
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, 96, 1, true);
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, v, 1 - u); }
+  return geometry;
 }
 function makePaper() {
   const pivot = new THREE.Group();             // hinge at the handle end; the far end slams onto the danger spot
   const tex = newspaperTexture(), L = 13;
   const roll = new THREE.Group(); roll.position.x = L / 2; roll.rotation.z = Math.PI / 2; pivot.add(roll);
   [[1.05, 0], [.78, .25], [.52, .5]].forEach(([r, inset], k) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L - inset, 64, 1, true), new THREE.MeshStandardMaterial({
+    const m = new THREE.Mesh(paperGeometry(r, L - inset), new THREE.MeshStandardMaterial({
       map: tex, color: k ? 0xd8d1bf : 0xffffff, roughness: .85, side: THREE.DoubleSide }));
+    m.rotation.y = -2.7; // face the printed headline toward the initial overview camera
     m.castShadow = k === 0; roll.add(m);
   });
   const band = new THREE.Mesh(new THREE.TorusGeometry(1.07, .06, 8, 48), new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: .5 }));
@@ -198,11 +230,29 @@ function makePaper() {
   pivot.position.set(-9, 0, 1.05);
   return pivot;
 }
-const apple = makeApple(); apple.visible = false; food.add(apple);
+function makeSugar() {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({color: 0xf8f2de, roughness: .95});
+  for (const [x, y, z, angle] of [[-.65, -.25, .75, .12], [.65, .25, .75, -.16], [.02, .04, 2.05, .22]]) {
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.35, 1.35), material);
+    cube.position.set(x, y, z); cube.rotation.z = angle; cube.castShadow = cube.receiveShadow = true; group.add(cube);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(cube.geometry), new THREE.LineBasicMaterial({color: 0xcac2aa, transparent: true, opacity: .5}));
+    cube.add(edges);
+  }
+  return group;
+}
+const apple = makeApple(), sugar = makeSugar(); apple.visible = sugar.visible = false; food.add(apple, sugar);
+let foodStyle = 'apple';
+function setFoodStyle(style) {
+  foodStyle = style === 'sugar' ? 'sugar' : 'apple';
+  apple.visible = propsOn && foodStyle === 'apple'; sugar.visible = propsOn && foodStyle === 'sugar';
+  if ($('food-style')) $('food-style').value = foodStyle;
+}
+if ($('food-style')) $('food-style').addEventListener('change', event => setFoodStyle(event.target.value));
 const paperAim = new THREE.Group(), paperHinge = makePaper(); paperAim.add(paperHinge); paperAim.visible = false; danger.add(paperAim);
 let propsOn = false;
 function setProps(on) {
-  propsOn = on; apple.visible = paperAim.visible = on;
+  propsOn = on; paperAim.visible = on; setFoodStyle(foodStyle);
   if (!on && game.over) clearGame();
   foodBall.visible = dangerBall.visible = dangerCloud.visible = particles.visible = !on;
   $('props-btn').classList.toggle('on', on);
@@ -232,9 +282,10 @@ function endGame(kind, info) {
 function showGameOverlay(kind) {
   if (game.over !== kind) return;
   const i = game.info;
+  $('game').dataset.result = kind === 'dead' ? 'lost' : 'won';
   $('game').className = 'game ' + (kind === 'dead' ? 'lose' : 'win');
   $('game-title').textContent = kind === 'dead' ? 'GAME OVER' : 'STAGE CLEAR!';
-  $('game-sub').innerHTML = kind === 'dead' ? `SWATTED AT ${i.t.toFixed(2)} S<br>${i.dist.toFixed(1)} MM FROM THE APPLE` : `APPLE REACHED IN ${i.t.toFixed(2)} S`;
+  $('game-sub').innerHTML = kind === 'dead' ? `SWATTED AT ${i.t.toFixed(2)} S<br>${i.dist.toFixed(1)} MM FROM THE FOOD` : `FOOD REACHED IN ${i.t.toFixed(2)} S`;
   const encounter = $('preset-newspaper')?.getAttribute('aria-pressed') === 'true';
   $('game-again').textContent = mode === 'playback' ? '▶ REPLAY' : encounter ? '▶ REPLAY ENCOUNTER' : '▶ START AGAIN';
   $('game-hint').textContent = mode === 'playback' ? 'replay of a real brain + physics run' : encounter ? 'Same scene · same seed · watch it again' : `next try uses seed ${+$('seed').value + 1} · sliders stay as set`;
@@ -280,15 +331,17 @@ function flyMaterial(n) {
   return std(0x8f6a45);
 }
 const flyRoot = new THREE.Group(); A.scene.add(flyRoot);
-const flyMeshes = meta.meshes.map(m => {
+const flyMeshes = [];
+for (const [meshIndex, m] of meta.meshes.entries()) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(verts.subarray(m.v[0] * 3, (m.v[0] + m.v[1]) * 3), 3));
   g.setIndex(new THREE.BufferAttribute(faces.subarray(m.f[0] * 3, (m.f[0] + m.f[1]) * 3), 1));
   g.computeVertexNormals();
   const mesh = new THREE.Mesh(g, flyMaterial(m.name));
   mesh.castShadow = !/Wing/i.test(m.name); mesh.matrixAutoUpdate = false;
-  flyRoot.add(mesh); return mesh;
-});
+  flyRoot.add(mesh); flyMeshes.push(mesh);
+  if (meshIndex % 8 === 7) await yieldToPresentation();
+}
 function setPoses(arr, frame) {
   const o = frame * G * 12;
   for (let k = 0; k < G; k++) {
@@ -342,14 +395,14 @@ const beacon = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.6, 64), new THREE.Me
 beacon.position.z = 0.07; A.scene.add(beacon);
 
 // ================================================================ BRAIN
-const B = makeView($('brainview'), { bloom: [0.35, 0.35, 0.55], bg: 0x03050a, zUp: false });
-B.controls.autoRotate = true; B.controls.autoRotateSpeed = 0.6;
+const B = makeView($('brainview'), { bg: 0x050506, zUp: false, brain: true });
+B.controls.autoRotate = false; B.controls.enablePan = false;
 const center = [0, 1, 2].map(a => { let s = 0; for (let i = a; i < npos.length; i += 3) s += npos[i]; return s / NN; });
 const bp = new Float32Array(NN * 3), bCol = new Float32Array(NN * 3), bStyle = new Float32Array(NN * 4), glow = new Float32Array(NN);
 const legendColors = meta.legend.map(l => new THREE.Color(l.color));
 // per group: [rest brightness, rest size, flash brightness, flash size]. Large, busy groups (KCs fire ~39 Hz
 // in this model) flash softly; the small decision groups (dopamine, MBONs, octopamine) flash big.
-const FLASH = [[.03, .6, .16, 1], [.3, 1.3, 1.5, 2.2], [.3, 1.3, 1.5, 2.2], [.22, 1.1, .9, 1.7], [.35, 1.4, 1.6, 2.4],
+const FLASH = [[.9, 1.15, 1.15, 1.45], [.3, 1.3, 1.5, 2.2], [.3, 1.3, 1.5, 2.2], [.22, 1.1, .9, 1.7], [.35, 1.4, 1.6, 2.4],
   [.45, 1.8, 2, 3], [.45, 1.8, 2, 3], [.45, 1.8, 2, 3], [.3, 1.4, 1.3, 2.2], [.25, 1.2, 1.1, 1.9], [.45, 1.8, 2, 3]];
 // glow[] holds each neuron's recent firing rate (Hz, exponential average); brightness = rate / (rate + 30 Hz)
 const ACT_TAU = 0.3, ACT_HALF = 30;
@@ -358,12 +411,21 @@ for (let i = 0; i < NN; i++) {
   const g = ngrp[i], c = legendColors[g];
   bCol.set([c.r, c.g, c.b], i * 3);
   bStyle.set(FLASH[g], i * 4);
+  if (i % 20000 === 19999) await yieldToPresentation();
 }
 const brainGeo = new THREE.BufferGeometry();
 brainGeo.setAttribute('position', new THREE.BufferAttribute(bp, 3));
 brainGeo.setAttribute('aColor', new THREE.BufferAttribute(bCol, 3));
 brainGeo.setAttribute('aStyle', new THREE.BufferAttribute(bStyle, 4));
 brainGeo.setAttribute('aGlow', new THREE.BufferAttribute(glow, 1));
+brainGeo.setAttribute('aGroup', new THREE.BufferAttribute(Float32Array.from(ngrp), 1));
+brainGeo.computeBoundingBox();
+// Render the dense background first, then the measured named groups. Every
+// neuron remains in the geometry; only draw order changes for legibility.
+const brainOrder = new Uint32Array(NN); let brainOrderIndex = 0;
+for (let i = 0; i < NN; i++) if (ngrp[i] === 0) brainOrder[brainOrderIndex++] = i;
+for (let i = 0; i < NN; i++) if (ngrp[i] !== 0) brainOrder[brainOrderIndex++] = i;
+brainGeo.setIndex(new THREE.BufferAttribute(brainOrder, 1));
 // decision focus: approach/avoid MBONs (1) and the dopamine neurons that weaken them (.6) are spotlighted
 const bDec = Float32Array.from(ngrp, g => (g === 6 || g === 7) ? 1 : (g === 4 || g === 5) ? .6 : 0);
 brainGeo.setAttribute('aDec', new THREE.BufferAttribute(bDec, 1));
@@ -382,21 +444,44 @@ function updateBlink(k, odor) {
   brainGeo.attributes.aChg.needsUpdate = true;
 }
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-B.controls.autoRotate = !reduceMotion;   // uTime stays 0: steady highlight, no flashing
+// Keep the whole brain stable by default; dragging still rotates the actual neurons.
 const brainPts = new THREE.Points(brainGeo, new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uSize: { value: 20 * Math.min(devicePixelRatio, 2) }, uHalf: { value: ACT_HALF }, uFocus: { value: 1 }, uTime: { value: 0 } },
-  vertexShader: `attribute vec3 aColor; attribute vec4 aStyle; attribute float aGlow; attribute float aDec; attribute float aChg; uniform float uSize, uHalf, uFocus, uTime; varying vec3 vC;
+  transparent: true, depthWrite: false, blending: THREE.NormalBlending,
+  uniforms: {uPixelRatio: {value: B.renderer.getPixelRatio()}, uFitDistance: {value: 15}, uHalf: {value: ACT_HALF},
+    uFocus: {value: 0}, uGroup: {value: -1}, uTime: {value: 0}},
+  vertexShader: `attribute vec3 aColor; attribute vec4 aStyle; attribute float aGlow, aDec, aChg, aGroup;
+    uniform float uPixelRatio, uFitDistance, uHalf, uFocus, uGroup, uTime; varying vec3 vC; varying float vAlpha;
     void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_Position = projectionMatrix*mv;
-      float level = aGlow / (aGlow + uHalf);
-      float spot = max(aDec, aChg), big = 1. + uFocus * spot * 1.6, dimRest = mix(1., mix(.2, 1., step(.01, spot)), uFocus);
-      float on = step(fract(uTime * 2.), .5);   // 2 Hz on/off, under the 3 flashes/s photosensitivity limit
-      gl_PointSize = max(mix(aStyle.y, aStyle.w, level), aChg * aStyle.w) * big * uSize / -mv.z;
-      vC = aColor * max(mix(aStyle.x, aStyle.z, level), aChg * aStyle.z) * mix(1., mix(.12, 1., on), aChg) * dimRest; }`,
-  fragmentShader: `varying vec3 vC; void main(){ vec2 d = gl_PointCoord - .5; float r = dot(d,d)*4.; if (r > 1.) discard;
-      float a = 1. - r; gl_FragColor = vec4(vC * a * a, 1.); }`
+      float level = aGlow / (aGlow + uHalf), selected = 1. - step(.1, abs(aGroup - uGroup));
+      float filtering = step(0., uGroup), spot = max(aDec, aChg);
+      float dimRest = mix(1., mix(.38, 1., step(.01, spot)), uFocus);
+      float groupDim = mix(1., mix(.22, 1., selected), filtering);
+      float on = step(fract(uTime * 2.), .5);
+      float size = max(mix(aStyle.y, aStyle.w, level), aChg * aStyle.w);
+      size *= 1. + uFocus * spot * .65 + filtering * selected * .9;
+      gl_PointSize = clamp(size * uPixelRatio * uFitDistance / max(.1,-mv.z), .9*uPixelRatio, 8.*uPixelRatio);
+      vC = aColor * max(mix(aStyle.x,aStyle.z,level),aChg*aStyle.z) * mix(1.,mix(.24,1.,on),aChg);
+      vAlpha = dimRest * groupDim * mix(.36,.95,step(.5,aGroup)); }
+  `,
+  fragmentShader: `varying vec3 vC; varying float vAlpha;
+    void main(){float r = length(gl_PointCoord-.5)*2.; if(r>1.) discard;
+      float edge = 1.-smoothstep(.65,1.,r); gl_FragColor=vec4(vC,vAlpha*edge);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`
 }));
 B.scene.add(brainPts);
-B.camera.position.set(0, 1.2, 13.5);
+const brainBounds = {min: brainGeo.boundingBox.min.toArray(), max: brainGeo.boundingBox.max.toArray()};
+function fitBrain(width = $('brainview').clientWidth, height = $('brainview').clientHeight) {
+  if (!width || !height) return;
+  const fit = fitBrainBounds(brainBounds, width, height, B.camera.fov);
+  B.controls.target.set(fit.center[0], fit.targetY, fit.center[2]);
+  B.camera.position.set(fit.center[0], fit.targetY, fit.center[2] + fit.distance);
+  B.controls.minDistance = fit.distance * .45; B.controls.maxDistance = fit.distance * 1.8;
+  brainPts.material.uniforms.uFitDistance.value = fit.distance;
+  B.controls.update();
+}
+B.onResize = fitBrain; fitBrain();
 // Themes change the stage lighting, never the scientific group colors.
 function applySceneTheme() {
   const burgundy = document.documentElement.dataset.theme === 'burgundy';
@@ -451,7 +536,8 @@ function label(pos, color) {
 const off = (v, x, y) => v.clone().add(new THREE.Vector3(x, y, 0));
 const labels = { app: label(off(CT.app[0], -1.3, .35), '#c6ff3c'), avo: label(off(CT.avo[1], 1.3, .35), '#ff3cd2'),
   pam: label(off(CT.pam[0], -1.3, -.45), '#2ee88a'), ppl1: label(off(CT.ppl1[1], 1.3, -.45), '#ff4b5c'), orb: label(off(orbPos, 0, .55), '#fff') };
-let focusOn = true;
+let focusOn = false;
+focusGroup.visible = false;
 function updateFocus(d) {
   focusGroup.visible = focusOn; brainPts.material.uniforms.uFocus.value = focusOn ? 1 : 0;
   $('circuit').querySelector('svg').style.display = focusOn ? 'none' : 'block';   // the why-panel replaces the strip
@@ -467,6 +553,73 @@ function updateFocus(d) {
   labels.ppl1.textContent = `punish DA: approach input ${(inA * 100).toFixed(0)}%`;
   labels.pam.textContent = `reward DA: avoid input ${(inV * 100).toFixed(0)}%`;
   labels.orb.textContent = `decision ${d.v >= 0 ? '+' : ''}${d.v.toFixed(2)}`;
+}
+
+// Group labels are anchored at centroids of the real neuron coordinates.
+// The screen rails keep names legible while their leaders retain that anchor.
+let brainLabelsOn = true, selectedBrainGroup = -1;
+const groupAnchors = meta.legend.map(() => new THREE.Vector3()), groupCounts = new Uint32Array(meta.legend.length);
+for (let i = 0; i < NN; i++) {
+  groupAnchors[ngrp[i]].x += bp[i * 3]; groupAnchors[ngrp[i]].y += bp[i * 3 + 1]; groupAnchors[ngrp[i]].z += bp[i * 3 + 2]; groupCounts[ngrp[i]]++;
+}
+groupAnchors.forEach((point, i) => point.divideScalar(Math.max(1, groupCounts[i])));
+const groupNames = ['Other neurons', 'Food ORNs', 'Danger ORNs', 'Kenyon cells', 'Reward · PAM', 'Punishment · PPL1', 'Approach MBONs', 'Avoid MBONs', 'Other MBONs', 'Descending', 'Octopamine'];
+const groupLabels = meta.legend.map((group, index) => {
+  const element = document.createElement('div'); element.className = 'brain-label';
+  element.style.cssText = `width:0;height:0;--group-color:${group.color}`;
+  const leader = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  leader.setAttribute('width', '1'); leader.setAttribute('height', '1'); leader.setAttribute('aria-hidden', 'true');
+  leader.style.cssText = 'position:absolute;overflow:visible;pointer-events:none';
+  const line = document.createElementNS(leader.namespaceURI, 'line'); line.setAttribute('stroke', group.color); line.setAttribute('stroke-opacity', '.65'); line.setAttribute('stroke-width', '1');
+  const dot = document.createElementNS(leader.namespaceURI, 'circle'); dot.setAttribute('r', '2.5'); dot.setAttribute('fill', group.color); leader.append(line, dot);
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = groupNames[index];
+  button.title = `${group.name}: ${group.count.toLocaleString()} actual neurons`; button.setAttribute('aria-label', `Highlight ${group.name}`);
+  button.style.cssText = 'position:absolute;left:0;top:0';
+  button.onclick = () => { if ($('brain-group')) { $('brain-group').value = selectedBrainGroup === index ? 'all' : String(index); $('brain-group').dispatchEvent(new Event('change')); } };
+  element.append(leader, button);
+  const object = new CSS2DObject(element); object.center.set(0, 0); object.position.copy(groupAnchors[index]); B.scene.add(object);
+  return {index, object, element, button, line, projected: new THREE.Vector3()};
+});
+if ($('brain-group')) {
+  $('brain-group').replaceChildren(new Option('Whole brain', 'all'), ...meta.legend.map((group, index) => new Option(`${groupNames[index]} · ${group.count.toLocaleString()}`, String(index))));
+  $('brain-group').addEventListener('change', event => {
+    const value = Number(event.target.value);
+    selectedBrainGroup = event.target.value !== 'all' && Number.isInteger(value) && value >= 0 && value < meta.legend.length ? value : -1;
+    brainPts.material.uniforms.uGroup.value = selectedBrainGroup;
+  });
+}
+if ($('brain-labels')) {
+  $('brain-labels').setAttribute('aria-pressed', 'true');
+  $('brain-labels').onclick = () => { brainLabelsOn = !brainLabelsOn; $('brain-labels').setAttribute('aria-pressed', String(brainLabelsOn)); };
+}
+function updateBrainLabels() {
+  const width = $('brainview').clientWidth, height = $('brainview').clientHeight;
+  const compact = matchMedia('(max-width:1099px)').matches;
+  const top = compact ? (height < 330 ? 152 : 176) : 180, bottom = compact ? 74 : 124;
+  const available = Math.max(44, height - top - bottom), narrow = width < 290;
+  // A 250px desktop pane cannot fit two full group names on the same row.
+  // Stagger those rails vertically, with room for the actual button height.
+  const capacity = narrow ? Math.min(5, Math.max(1, Math.floor(available / (compact ? 50 : 36))))
+    : Math.min(5, Math.max(2, Math.floor(available / 46) * 2));
+  const visible = selectedBrainGroup >= 0 ? [selectedBrainGroup] : [4, 5, 6, 7, 3].slice(0, capacity);
+  const active = groupLabels.filter(entry => visible.includes(entry.index));
+  for (const entry of groupLabels) {
+    entry.object.visible = brainLabelsOn && visible.includes(entry.index);
+    entry.element.classList.toggle('is-selected', entry.index === selectedBrainGroup);
+    entry.button.setAttribute('aria-pressed', String(entry.index === selectedBrainGroup));
+    entry.projected.copy(groupAnchors[entry.index]).project(B.camera);
+  }
+  active.sort((a, b) => b.projected.y - a.projected.y);
+  active.forEach((entry, rank) => {
+    const anchorX = (entry.projected.x + 1) * width / 2, anchorY = (1 - entry.projected.y) * height / 2;
+    const railX = active.length === 1 ? width / 2 : (rank % 2 ? width - 80 : 80);
+    const railY = active.length === 1 ? Math.max(top + 22, height - bottom - 24)
+      : narrow ? top + available * (rank + .5) / active.length
+      : top + available * (Math.floor(rank / 2) + .5) / Math.ceil(active.length / 2);
+    const dx = railX - anchorX, dy = railY - anchorY;
+    entry.button.style.transform = `translate(${dx}px,${dy}px) translate(-50%,-50%)`;
+    entry.line.setAttribute('x2', String(dx)); entry.line.setAttribute('y2', String(dy));
+  });
 }
 
 // legend + circuit strip
@@ -533,7 +686,7 @@ function nearestPoint(reward, punish, odor) {
 async function loadVal() {
   try {
     const [v, bi, br] = await Promise.all([json('assets/valence.json'), bin('assets/brain_idx.bin', Uint32Array), bin('assets/brain_rates.bin', Float32Array)]);
-    for (const p of v.points) {       // per-point group means + dopamine means for the UI
+    for (const [pointIndex, p] of v.points.entries()) {       // per-point group means + dopamine means for the UI
       const tr = Object.entries(p.traces);
       const mean = f => { const x = tr.filter(([k]) => f(k)).map(([, y]) => y); return x.reduce((a, b) => a + b, 0) / Math.max(x.length, 1); };
       p.pam_mean = mean(k => k.startsWith('PAM')); p.ppl1_mean = mean(k => k.startsWith('PPL1'));
@@ -541,6 +694,7 @@ async function loadVal() {
       p.key = new Float32Array(keyIdx.length);    // dense rates of the neurons that can blink
       for (let j = p.sparse[0]; j < p.sparse[0] + p.sparse[1]; j++) { sum[ngrp[bi[j]]] += br[j]; if (keySlot[bi[j]] >= 0) p.key[keySlot[bi[j]]] = br[j]; }
       p.groupRate = Array.from(sum, (x, g) => x / Math.max(groupSize[g], 1));
+      if (pointIndex % 4 === 3) await yieldToPresentation();
     }
     [val, bidx, brates, K, OD] = [v, bi, br, v.knob, v.odor_hz];
     endoOA = P(K.indexOf(0), K.indexOf(0), 0).oa_hz;
@@ -839,6 +993,7 @@ $('game-again').onclick = () => {
   $('seed').value = +$('seed').value + 1; markCustomSettings(); liveReset(); playing = true; $('play').textContent = '⏸ Pause';
 };
 $('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); markCustomSettings(); setProps(!propsOn); };
+$('focus-btn').classList.toggle('on', focusOn);
 $('focus-btn').setAttribute('aria-pressed', String(focusOn));
 $('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); hud(); };
 $('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
@@ -929,7 +1084,7 @@ if (initialRecording) await openRecording(initialRecording, true);
 let presentationReady = false;
 const clock = new THREE.Clock(); let hudT = 0, blinkT = 0;
 const flyPos = new THREE.Vector3();
-function frame() {
+function frame(schedule = true) {
   const delta = Math.min(clock.getDelta(), 0.05), rdt = presentationReady ? delta : 0, t = clock.elapsedTime;
   if (mode === 'live') {
     const dt = rdt * +$('speed').value;
@@ -972,19 +1127,26 @@ function frame() {
   beacon.position.x = flyPos.x; beacon.position.y = flyPos.y;
   beacon.material.opacity = clamp((A.camera.position.distanceTo(flyPos) - 14) / 30, 0, 0.75) * (0.75 + 0.25 * Math.sin(t * 4));
   A.controls.update(); B.controls.update();
+  const bounded = boundedArenaTarget(A.controls.target.toArray(), [world.food, world.danger, [flyPos.x, flyPos.y]]);
+  const panCorrection = new THREE.Vector3(...bounded).sub(A.controls.target);
+  A.controls.target.add(panCorrection); A.camera.position.add(panCorrection);
+  floor.position.set(A.controls.target.x, A.controls.target.y, 0);
+  odorPlane.position.set(A.controls.target.x, A.controls.target.y, .02);
   const shakeOff = new THREE.Vector3();
   if (!reduceMotion && game.shake > .01) { shakeOff.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(game.shake); game.shake *= Math.exp(-rdt / .12); }
   A.camera.position.add(shakeOff);
   if ($('arena').clientWidth > 0) A.composer.render();
-  if (brainVisible) { B.composer.render(); labelRenderer.render(B.scene, B.camera); }   // skip hidden brain
+  if (brainVisible) { B.composer.render(); updateBrainLabels(); labelRenderer.render(B.scene, B.camera); }   // skip hidden brain
   A.camera.position.sub(shakeOff);
   if ((hudT += rdt) > 0.08) { hudT = 0; hud(); }
-  requestAnimationFrame(frame);
+  if (schedule) requestAnimationFrame(() => frame());
 }
-frame();
+await Promise.all([A.renderer.compileAsync(A.scene, A.camera), B.renderer.compileAsync(B.scene, B.camera)]);
+frame(false);
 prepared('frame');
 // Render a ready scene underneath the opening; simulation time starts after its reveal.
 await window.ChanjLoader?.finish();
 presentationReady = true; clock.start();
+requestAnimationFrame(() => frame());
 if (val && mode === 'live' && qs.get('autoplay') !== '0' && !playing) $('play').click();
 document.dispatchEvent(new CustomEvent('chanj:ready', { detail: { autoplay: playing, props: propsOn, mode } }));

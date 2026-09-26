@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-27",
+  "mode": "built-in image_gen edit; transparent_background=true",
+  "reference": "assets/loading/newspaper-hand.webp (previous release)",
+  "original_output": "/Users/Bytepitch/.codex/generated_images/01a0df45-2871-7ff2-9938-1f477059d942/exec-54749cb7-3ec2-4ad3-8eb9-2c50850f2234.png",
+  "source": "assets/loading/source/newspaper-firebird-alpha.png",
+  "runtime_asset": "assets/loading/newspaper-hand.webp",
+  "encoding": "Sharp resize to 1200x800; WebP quality90, alphaQuality100, effort6; no compositing or retouching",
+  "prompt": "Use case: text-localization. Edit target: supplied transparent hand holding a rolled newspaper, a runtime cutout for the Chanjs website. Change ONLY the newspaper's printed content. Preserve the hand, all anatomy, grip, paper silhouette, diagonal orientation, folds, lighting, exact composition, transparent background, and contact point near 13% across / 15% down the image. Keep the whole newspaper and hand in the same locations and the forearm entering lower right. On the broad outward-facing paper surface, print a crisply legible large black newspaper masthead 'FIREBIRD', and directly below it the bold multi-line headline 'CHANJS WINS FIREBIRD HACKATHON'. Exact spelling: C H A N J S, F I R E B I R D, H A C K A T H O N. Make the headline large enough to read when zooming the asset, following the newspaper's natural curved perspective. Keep realistic off-white newsprint and fine smaller abstract editorial columns elsewhere. No added logos, no additional objects, no backdrop, no external glow or cast shadow outside the cutout, no extra fingers. Preserve genuine transparent alpha around and between all edges. Output a landscape 3:2 transparent cutout with the same framing."
+}
