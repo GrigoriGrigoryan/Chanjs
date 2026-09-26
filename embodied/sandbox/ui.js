@@ -253,6 +253,7 @@ for (const id of ['replay-baseline', 'replay-modulated']) {
 }
 desktop.addEventListener('change', () => { setView(activeView); syncControlsLayout(); });
 document.addEventListener('chanj:ready', () => { syncPlayback(); showCoach(); });
+document.addEventListener('chanj:encounter', () => { hideCoach(); setView('arena'); closeDialog(controls); });
 window.addEventListener('popstate', () => {
   const theme = new URL(location.href).searchParams.get('theme');
   if (theme) setTheme(theme, false);

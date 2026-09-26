@@ -1,19 +1,18 @@
-/* CHANJS first-visit introduction; resource readiness and cinema stay separate. */
+/* Measured preparation progress, then one readiness-gated CHANJS encounter. */
 (function () {
   'use strict';
   if (window.ChanjLoader) return;
-
   const scriptUrl = document.currentScript && document.currentScript.src;
   const assetBase = scriptUrl || new URL('loading.js', location.href);
   const artUrl = new URL('assets/loading/newspaper-hand.webp', assetBase).href;
   const markUrl = new URL('assets/brand/fly-eye.svg', assetBase).href;
-  const SEEN_KEY = 'chanjs-intro-v3';
-  const INTRO_MS = 2800, REVEAL_MS = 400, REDUCED_MS = 180;
+  const SEEN_KEY = 'chanjs-intro-v4';
+  const MIN_ORBIT_MS = 1200, AIM_MS = 260, HIT_MS = 380, INK_MS = 500, REVEAL_MS = 800;
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let root, dock, title, detail, phase, elapsed, dockTime, retryButton;
-  let cycle = null, visible = false, pageSeen = false, waitingForBody = false;
-  let pendingOptions = null, returnFocus = null;
-  const defaults = { title: 'A tiny fly. A whole world.', detail: 'Preparing the experiment…', timeoutMs: 45000 };
+  const defaults = { title: 'Preparing your world.', detail: 'Loading the experiment…', timeoutMs: 45000 };
+  let root, dock, title, detail, phase, elapsed, dockTime, retryButton, flyNode, progressNode, numberNode;
+  let cycle = null, visible = false, pageSeen = false, waitingForBody = false, pendingOptions = null, returnFocus = null;
+  let pendingProgress = 0, geometry = { rx: 200, ry: 105, strikeY: -45 };
 
   function currentTheme() {
     const selected = document.documentElement.dataset.theme;
@@ -38,10 +37,12 @@
   function makeCycle(settings) {
     let resolve;
     const promise = new Promise(done => { resolve = done; });
-    return { ready: false, failed: false, ended: false, mounted: false, introDone: false,
-      skipped: false, exiting: false, reduced: motionPreference.matches, returning: hasSeenIntro(),
-      startedAt: performance.now(), readyAt: null, retry: typeof settings.retry === 'function' ? settings.retry : null,
-      tick: 0, timeout: 0, introTimer: 0, exitTimer: 0, exitListener: null, promise, resolve };
+    return { ready: false, failed: false, ended: false, mounted: false, skipped: false,
+      returning: hasSeenIntro(), reduced: motionPreference.matches, scene: 'orbit', serial: 0,
+      measured: pendingProgress, displayed: 0, lastNumber: -1, pos: { x: 0, y: 0, angle: 90 },
+      startedAt: performance.now(), visibleAt: 0, readyAt: null, lastFrame: 0,
+      retry: typeof settings.retry === 'function' ? settings.retry : null,
+      tick: 0, timeout: 0, raf: 0, phaseTimer: 0, exitTimer: 0, exitListener: null, promise, resolve };
   }
   function flyingFly() {
     return `<svg viewBox="0 0 180 150" aria-hidden="true" focusable="false" fill="none">
@@ -55,69 +56,54 @@
         <path d="M85 65 78 46 70 42M99 65 105 45 114 42"/>
         <ellipse cx="91" cy="60" rx="19" ry="15" fill="#9c4836"/>
         <ellipse cx="78" cy="60" rx="8" ry="12" fill="#e9633c"/><ellipse cx="104" cy="59" rx="8" ry="12" fill="#e9633c"/>
-        <path d="m85 54 5-5 7 3" stroke="#eac793" stroke-width="2"/>
+        <path d="M90 51C87 40 89 28 96 17" stroke="#191514" stroke-width="9"/><path d="M90 51C87 40 89 28 96 17" stroke="#d6a37d" stroke-width="5"/><path d="m88 38 6 1m-5-10 6 2" stroke="#6c4133" stroke-width="2"/><ellipse cx="97" cy="15" rx="7" ry="4" fill="#8c5140" stroke="#191514" stroke-width="2"/>
       </g>
     </svg>`;
   }
+
   function paperFallback() {
-    // Immediate code-native silhouette while the optional photograph downloads.
-    return `<svg class="cl-paper-fallback" viewBox="0 0 1200 800" aria-hidden="true" focusable="false">
-      <g transform="rotate(-42 570 450)"><path d="M505 64Q566 18 634 64L648 595Q575 632 506 594Z" fill="#f2e8ce" stroke="#312e29" stroke-width="3"/>
-      <ellipse cx="570" cy="66" rx="64" ry="22" fill="#cfbfa2" stroke="#312e29" stroke-width="3"/><ellipse cx="569" cy="64" rx="40" ry="10" fill="#544d41"/>
-      <path d="M524 145h102v86H524z" fill="#38352e"/>
-      <path d="M525 260h100m-100 15h100m-100 15h100m-100 15h100m-100 40h100m-100 15h100m-100 15h100m-100 15h100m-100 40h100m-100 15h100m-100 15h100m-100 15h100" stroke="#655e4e" stroke-width="5"/>
+    return `<svg class="cl-paper-fallback" viewBox="0 0 1200 800" aria-hidden="true"><g transform="translate(156 120) rotate(-42)">
+      <path d="M-55 0H55L66 560Q0 590-60 560Z" fill="#e9dfc8" stroke="#39302b" stroke-width="3"/>
+      <ellipse rx="55" ry="22" fill="#c7b99f" stroke="#39302b" stroke-width="3"/><ellipse rx="32" ry="10" fill="#50473d"/>
+      <path d="M-38 80h76v85h-76z" fill="#403a33"/><path d="M-38 205h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78" stroke="#655d4f" stroke-width="5"/>
       </g></svg>`;
+  }
+  function inkSplash() {
+    return `<svg viewBox="0 0 240 220" aria-hidden="true" focusable="false"><path d="M122 38C130 2 143 19 140 48L170 22C181 22 165 54 167 64L208 51C224 52 201 73 181 86L225 96C244 109 211 115 188 113L214 149C217 166 189 145 175 139L179 185C169 208 159 177 151 162L129 209C113 222 118 184 111 171L78 195C54 202 82 175 80 161L35 171C11 161 57 146 62 133L19 112C-1 95 38 99 57 97L30 65C22 40 56 72 70 69L70 31C78 4 91 51 102 53Z"/><circle cx="27" cy="31" r="7"/><circle cx="220" cy="179" r="5"/><circle cx="212" cy="29" r="4"/><circle cx="51" cy="202" r="4"/></svg>`;
   }
   function mount() {
     if (root) return;
-    root = document.createElement('section');
-    root.className = 'chanj-loader';
-    root.hidden = true;
-    root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-modal', 'true');
-    root.setAttribute('aria-labelledby', 'cl-title');
-    root.innerHTML = `<header class="cl-top"><span class="cl-brand"><img class="cl-brand-mark" alt="" width="26" height="26">CHANJS<span class="cl-brand-slash">/</span><span class="cl-atlas">A FLY'S WORLD</span></span><button type="button" class="cl-hide">Skip intro <span aria-hidden="true">↗</span></button></header>
-      <div class="cl-stage" aria-hidden="true">
-        <img class="cl-return-mark" alt="" width="128" height="128">
-        <div class="cl-stage-copy"><span class="cl-index">01 / A MOMENT IN A FLY’S WORLD</span><p>Small brain.<br><em>Big world.</em></p></div>
-        <span class="cl-side-note">A WORLD IN EVERY CONNECTION.</span>
-        <div class="cl-wordmark"><span>C</span><span>H</span><span>A</span><span>N</span><span>J</span><span>S</span></div>
-        <svg class="cl-flightline" viewBox="0 0 1000 500" preserveAspectRatio="none"><path d="M-50 350C120 260 280 435 410 280S650 30 740 180 1040 260 1100 50"/></svg>
-        <div class="cl-fly">${flyingFly()}</div>
-        <div class="cl-swat">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="high"></div>
-        <span class="cl-impact cl-impact-one"></span><span class="cl-impact cl-impact-two"></span><span class="cl-impact cl-impact-three"></span>
-        <span class="cl-escape-note">A SMALL INTERRUPTION.</span>
-        <span class="cl-illustration">Illustrated introduction</span>
+    root = document.createElement('section'); root.className = 'chanj-loader'; root.hidden = true;
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'cl-title');
+    root.innerHTML = `<header class="cl-top"><span class="cl-brand"><img class="cl-brand-mark" alt="" width="28" height="28">CHANJS<span class="cl-brand-note">BRAIN / BODY / WORLD</span></span><button type="button" class="cl-hide">Skip intro <span aria-hidden="true">↗</span></button></header>
+      <div class="cl-stage"><p class="cl-stage-label">A SMALLER WORLD IS TAKING SHAPE</p>
+        <div class="cl-orbit-line" aria-hidden="true"></div>
+        <div class="cl-readout"><div class="cl-progress" role="progressbar" aria-label="Experiment preparation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="cl-number" aria-hidden="true">00</span><span class="cl-percent-unit" aria-hidden="true">%</span></div><p class="cl-progress-label">PREPARING YOUR WORLD</p></div>
+        <div class="cl-fly" aria-hidden="true">${flyingFly()}</div>
+        <div class="cl-strike-origin" aria-hidden="true"><div class="cl-paper-motion">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="high"></div></div>
+        <div class="cl-splash" aria-hidden="true">${inkSplash()}</div>
+        <p class="cl-welcome" aria-hidden="true">Welcome to<br><span>a smaller world.</span></p>
+        <p class="cl-illustration">Illustrated introduction</p>
       </div>
-      <footer class="cl-bottom"><div class="cl-copy"><h2 id="cl-title"></h2><div class="cl-status"><span class="cl-status-mark" aria-hidden="true"></span><div><p class="cl-phase">PREPARING THE WORLD</p><p class="cl-detail" role="status" aria-live="polite" aria-atomic="true"></p></div></div></div><div class="cl-actions"><button type="button" class="cl-retry" hidden>Retry loading <span aria-hidden="true">↗</span></button></div><div class="cl-time"><span>ELAPSED</span><output role="timer" aria-live="off">00:00</output></div></footer>`;
+      <footer class="cl-bottom"><div class="cl-copy"><h2 id="cl-title"></h2><div class="cl-status"><span class="cl-status-mark" aria-hidden="true"></span><div><p class="cl-phase">LOADING</p><p class="cl-detail" role="status" aria-live="polite" aria-atomic="true"></p></div></div></div><div class="cl-actions"><button type="button" class="cl-retry" hidden>Retry loading <span aria-hidden="true">↗</span></button></div><div class="cl-time"><span>ELAPSED</span><output role="timer" aria-live="off">00:00</output></div></footer>`;
     document.body.append(root);
-    dock = document.createElement('button');
-    dock.type = 'button';
-    dock.className = 'chanj-loader-dock';
-    dock.hidden = true;
+    dock = document.createElement('button'); dock.type = 'button'; dock.className = 'chanj-loader-dock'; dock.hidden = true;
     dock.innerHTML = '<span aria-hidden="true" class="cl-dock-dot"></span><span class="cl-dock-text">Loading continues</span><span class="cl-dock-time" aria-hidden="true">00:00</span><span aria-hidden="true">↗</span>';
-    dock.setAttribute('aria-label', 'Show loading status');
-    document.body.append(dock);
-    syncTheme();
-    window.addEventListener('chanj:themechange', syncTheme);
+    dock.setAttribute('aria-label', 'Show loading status'); document.body.append(dock);
+    title = root.querySelector('#cl-title'); detail = root.querySelector('.cl-detail'); phase = root.querySelector('.cl-phase');
+    elapsed = root.querySelector('output'); dockTime = dock.querySelector('.cl-dock-time'); retryButton = root.querySelector('.cl-retry');
+    flyNode = root.querySelector('.cl-fly'); progressNode = root.querySelector('.cl-progress'); numberNode = root.querySelector('.cl-number');
+    syncTheme(); window.addEventListener('chanj:themechange', syncTheme);
     new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const hand = root.querySelector('.cl-hand');
     hand.addEventListener('load', () => { root.dataset.art = 'ready'; }, { once: true });
-    hand.addEventListener('error', () => { root.dataset.art = 'fallback'; }, { once: true });
-    hand.src = artUrl;
-    root.querySelector('.cl-brand-mark').src = root.querySelector('.cl-return-mark').src = markUrl;
-    title = root.querySelector('#cl-title');
-    detail = root.querySelector('.cl-detail');
-    phase = root.querySelector('.cl-phase');
-    elapsed = root.querySelector('output');
-    dockTime = dock.querySelector('.cl-dock-time');
-    retryButton = root.querySelector('.cl-retry');
-    root.querySelector('.cl-hide').addEventListener('click', hide);
-    dock.addEventListener('click', reveal);
+    hand.addEventListener('error', () => { root.dataset.art = 'fallback'; }, { once: true }); hand.src = artUrl;
+    root.querySelector('.cl-brand-mark').src = markUrl;
+    new ResizeObserver(measureScene).observe(root.querySelector('.cl-stage'));
+    root.querySelector('.cl-hide').addEventListener('click', hide); dock.addEventListener('click', reveal);
     retryButton.addEventListener('click', () => {
       if (!cycle || !cycle.retry) { window.location.reload(); return; }
-      const retry = cycle.retry;
-      resetForRetry(cycle);
+      const retry = cycle.retry; resetForRetry(cycle);
       try { Promise.resolve(retry()).catch(error => fail(error.message || 'Loading failed.', retry)); }
       catch (error) { fail(error.message || 'Loading failed.', retry); }
     });
@@ -130,194 +116,207 @@
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
   }
-
+  function measureScene() {
+    if (!root) return;
+    const box = root.querySelector('.cl-stage').getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    geometry = { rx: Math.min(290, box.width * .365), ry: Math.min(140, box.height * .29), strikeY: -Math.min(48, box.height * .1) };
+    root.style.setProperty('--cl-orbit-width', `${geometry.rx * 2}px`);
+    root.style.setProperty('--cl-orbit-height', `${geometry.ry * 2}px`);
+    root.style.setProperty('--cl-strike-y', `${geometry.strikeY}px`);
+    if (cycle && ['strike', 'impact'].includes(cycle.scene)) putFly(cycle, 0, geometry.strikeY, 12);
+  }
   function formatTime(c) {
-    const end = c.readyAt === null ? performance.now() : c.readyAt;
-    const seconds = Math.max(0, Math.floor((end - c.startedAt) / 1000));
+    const seconds = Math.max(0, Math.floor(((c.readyAt === null ? performance.now() : c.readyAt) - c.startedAt) / 1000));
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
-  function updateTime() {
-    if (!root || !cycle) return;
-    elapsed.textContent = dockTime.textContent = formatTime(cycle);
-  }
-  function clearLoadTimers(c) {
-    clearInterval(c.tick); clearTimeout(c.timeout); c.tick = c.timeout = 0;
-  }
+  function updateTime() { if (root && cycle) elapsed.textContent = dockTime.textContent = formatTime(cycle); }
+  function clearLoadTimers(c) { clearInterval(c.tick); clearTimeout(c.timeout); c.tick = c.timeout = 0; }
+  function stopFrame(c) { cancelAnimationFrame(c.raf); c.raf = 0; c.lastFrame = 0; }
   function cancelExit(c) {
     clearTimeout(c.exitTimer); c.exitTimer = 0;
     if (root && c.exitListener) root.removeEventListener('transitionend', c.exitListener);
-    c.exitListener = null; c.exiting = false;
-    if (root) delete root.dataset.exiting;
+    c.exitListener = null;
+    if (root) { delete root.dataset.exiting; root.style.removeProperty('--cl-exit-ms'); }
   }
-  function restoreFocus() {
-    if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus({ preventScroll: true });
+  function stopCinema(c) { c.serial++; clearTimeout(c.phaseTimer); c.phaseTimer = 0; cancelExit(c); }
+  function later(c, fn, ms) {
+    clearTimeout(c.phaseTimer); const serial = c.serial;
+    c.phaseTimer = window.setTimeout(() => { if (cycle === c && !c.ended && !c.failed && c.serial === serial) fn(); }, ms);
   }
-  function reveal() {
-    if (!cycle || cycle.ended || !root) return;
-    visible = true;
-    root.hidden = false; dock.hidden = true;
-    document.documentElement.classList.add('chanj-loading-lock');
-    root.querySelector('.cl-hide').focus({ preventScroll: true });
+  function restoreFocus() { if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus({ preventScroll: true }); }
+  function renderProgress(c) {
+    if (!root) return;
+    if (c.failed) {
+      c.lastNumber = -1; delete root.dataset.percent; numberNode.textContent = '—'; progressNode.removeAttribute('aria-valuenow'); progressNode.setAttribute('aria-valuetext', 'Loading stopped'); return;
+    }
+    const value = Math.min(c.ready ? 100 : 99, Math.floor(c.displayed * 100 + .000001));
+    if (value !== c.lastNumber) {
+      c.lastNumber = value; numberNode.textContent = String(value).padStart(2, '0');
+      progressNode.setAttribute('aria-valuenow', String(value)); progressNode.removeAttribute('aria-valuetext');
+      root.dataset.percent = String(value);
+    }
   }
-  function endCinema(c, skipped) {
-    clearTimeout(c.introTimer); c.introTimer = 0;
-    c.introDone = true;
-    if (skipped) c.skipped = true;
-    rememberIntro();
-    if (root) root.dataset.cinema = 'settled';
+  function target(c) {
+    const orbitPending = !c.returning && !c.reduced && !c.skipped && performance.now() - c.visibleAt < MIN_ORBIT_MS;
+    return c.ready && !orbitPending ? 1 : Math.min(.99, c.measured);
   }
+  function putFly(c, x, y, angle) {
+    c.pos = { x, y, angle };
+    if (flyNode) flyNode.style.transform = `translate(-50%, -50%) translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${angle.toFixed(2)}deg)`;
+  }
+  function tickFrame(c, now) {
+    c.raf = 0;
+    if (cycle !== c || c.ended || c.failed || !c.mounted || !visible) return;
+    const dt = c.lastFrame ? Math.min(80, Math.max(0, now - c.lastFrame)) : 16; c.lastFrame = now;
+    const t = target(c), gap = t - c.displayed;
+    c.displayed = Math.min(t, c.displayed + Math.max(0, gap) * (1 - Math.exp(-dt / 150)));
+    if (gap < (c.ready ? .001 : .0001)) c.displayed = t;
+    renderProgress(c);
+    if (!c.returning && !c.reduced && c.scene === 'orbit') {
+      const angle = (now - c.visibleAt) / 1700 * Math.PI * 2 - Math.PI * .85;
+      const x = Math.cos(angle) * geometry.rx, y = Math.sin(angle) * geometry.ry;
+      putFly(c, x, y, Math.atan2(Math.cos(angle) * geometry.ry, -Math.sin(angle) * geometry.rx) * 180 / Math.PI + 90);
+    } else if (c.scene === 'aim') {
+      const t = Math.min(1, (now - c.aimStart) / AIM_MS), eased = 1 - Math.pow(1 - t, 3);
+      putFly(c, c.aimFrom.x * (1 - eased), c.aimFrom.y + (geometry.strikeY - c.aimFrom.y) * eased, c.aimFrom.angle + (12 - c.aimFrom.angle) * eased);
+    }
+    advance(c, now);
+    if (!c.ended && !c.failed && visible && c.scene !== 'revealing') c.raf = requestAnimationFrame(time => tickFrame(c, time));
+  }
+  function startFrame(c) { if (!c.raf && c.mounted && !c.failed && !c.ended && visible) c.raf = requestAnimationFrame(time => tickFrame(c, time)); }
   function complete(c) {
     if (cycle !== c || c.ended || !c.ready || c.failed) return;
     const hadFocus = visible && root && root.contains(document.activeElement);
-    clearLoadTimers(c); clearTimeout(c.introTimer); cancelExit(c);
-    visible = false; c.ended = true;
+    clearLoadTimers(c); stopFrame(c); stopCinema(c);
+    visible = false; c.ended = true; rememberIntro();
     if (root) root.hidden = dock.hidden = true;
-    document.documentElement.classList.remove('chanj-loading-lock');
-    if (hadFocus) restoreFocus();
-    // Resolve after the actual DOM hide, never just when resource loading ends.
+    document.documentElement.classList.remove('chanj-loading-lock'); if (hadFocus) restoreFocus();
     c.resolve();
   }
-  function maybeComplete(c) {
-    if (cycle !== c || c.ended || c.failed || !c.ready || !c.introDone || !c.mounted || c.exiting) return;
-    if (!visible || c.reduced || c.returning || c.skipped) { complete(c); return; }
-    c.exiting = true;
-    root.dataset.exiting = 'true';
-    c.exitListener = event => {
-      if (event.target === root && event.propertyName === 'opacity') complete(c);
-    };
+  function beginExit(c, duration) {
+    if (!c.ready || c.failed || c.ended || c.scene === 'revealing') return;
+    c.scene = 'revealing'; stopFrame(c);
+    if (!visible || !duration) { complete(c); return; }
+    root.style.setProperty('--cl-exit-ms', `${duration}ms`); root.dataset.exiting = 'true';
+    const serial = c.serial;
+    c.exitListener = event => { if (event.target === root && event.propertyName === 'opacity' && c.serial === serial) complete(c); };
     root.addEventListener('transitionend', c.exitListener);
-    // If transitions are disabled or the browser suppresses transitionend, hide
-    // explicitly before resolving. A late asset error can cancel this fallback.
-    c.exitTimer = window.setTimeout(() => complete(c), REVEAL_MS + 80);
+    c.exitTimer = window.setTimeout(() => { if (c.serial === serial) complete(c); }, duration + 80);
+  }
+  function impact(c) {
+    if (!c.ready || c.failed) return;
+    c.scene = 'impact'; root.dataset.cinema = 'impact'; putFly(c, 0, geometry.strikeY, 12);
+    rememberIntro();
+    later(c, () => beginExit(c, c.reduced ? 0 : REVEAL_MS), c.reduced ? 160 : INK_MS);
+  }
+  function beginStrike(c) {
+    c.scene = 'aim'; c.aimStart = performance.now(); c.aimFrom = { ...c.pos }; root.dataset.cinema = 'aim';
+    later(c, () => {
+      c.scene = 'strike'; root.dataset.cinema = 'strike'; putFly(c, 0, geometry.strikeY, 12);
+      later(c, () => impact(c), HIT_MS);
+    }, AIM_MS);
+  }
+  function advance(c, now) {
+    if (!c.mounted || c.ended || c.failed || !c.ready) return;
+    if (c.skipped || !visible) { c.displayed = 1; renderProgress(c); complete(c); return; }
+    if (c.returning && c.scene === 'orbit') { c.displayed = 1; renderProgress(c); beginExit(c, c.reduced ? 0 : 180); return; }
+    if (c.reduced && c.scene === 'orbit') { c.displayed = 1; renderProgress(c); impact(c); return; }
+    if (c.scene === 'orbit' && c.displayed === 1 && now - c.visibleAt >= MIN_ORBIT_MS) beginStrike(c);
+  }
+  function reveal() {
+    const c = cycle; if (!c || c.ended || !root) return;
+    visible = true; root.hidden = false; dock.hidden = true;
+    document.documentElement.classList.add('chanj-loading-lock'); measureScene();
+    root.querySelector('.cl-hide').focus({ preventScroll: true }); startFrame(c);
   }
   function hide() {
-    const c = cycle;
-    if (!c || c.ended) return;
-    endCinema(c, true);
-    cancelExit(c);
-    visible = false;
-    if (root) { root.hidden = true; dock.hidden = false; }
-    document.documentElement.classList.remove('chanj-loading-lock');
-    restoreFocus();
-    // Skip dismisses cinema, not resource loading. The dock persists until ready.
-    maybeComplete(c);
+    const c = cycle; if (!c || c.ended) return;
+    c.skipped = true; c.returning = true; stopCinema(c); stopFrame(c); rememberIntro();
+    c.scene = 'orbit'; visible = false;
+    if (root) { root.dataset.mode = 'returning'; root.dataset.cinema = 'orbit'; root.hidden = true; dock.hidden = false; }
+    document.documentElement.classList.remove('chanj-loading-lock'); restoreFocus(); advance(c, performance.now());
   }
   function armLoading(c, timeoutMs) {
-    clearLoadTimers(c);
-    c.tick = window.setInterval(updateTime, 1000);
+    clearLoadTimers(c); c.tick = window.setInterval(updateTime, 1000);
     const wait = Number(timeoutMs);
     if (wait > 0 && Number.isFinite(wait)) c.timeout = window.setTimeout(() => {
       if (cycle !== c || c.ended || c.ready || c.failed) return;
-      root.dataset.state = 'slow';
-      phase.textContent = 'STILL LOADING';
+      root.dataset.state = 'slow'; phase.textContent = 'STILL LOADING';
       detail.textContent = 'This is taking longer than expected. You can keep waiting or retry.';
-      retryButton.hidden = false;
-      dock.querySelector('.cl-dock-text').textContent = 'Loading is taking longer';
+      retryButton.hidden = false; dock.querySelector('.cl-dock-text').textContent = 'Loading is taking longer';
     }, wait);
   }
   function startMountedCycle(c, settings) {
-    mount(); syncTheme();
-    c.mounted = true;
+    mount(); syncTheme(); c.mounted = true; c.visibleAt = performance.now();
     if (typeof settings.retry === 'function') c.retry = settings.retry;
-    if (c.returning || c.failed) c.introDone = true;
     root.dataset.state = c.failed ? 'error' : (c.ready ? 'ready' : 'loading');
-    root.dataset.mode = c.returning ? 'returning' : 'cinematic';
-    root.dataset.motion = c.reduced ? 'reduced' : 'full';
-    root.dataset.cinema = c.introDone ? 'settled' : 'playing';
-    delete root.dataset.exiting;
-    title.textContent = settings.title;
-    detail.textContent = c.ready ? 'Your fly is ready.' : settings.detail;
-    phase.textContent = c.failed ? 'LOADING STOPPED' : (c.ready ? 'READY' : 'PREPARING THE WORLD');
-    retryButton.hidden = !c.failed;
-    dock.querySelector('.cl-dock-text').textContent = 'Loading continues';
-    returnFocus = document.activeElement;
-    if (!c.skipped) reveal();
-    else { root.hidden = true; dock.hidden = false; }
-    if (!c.introDone) c.introTimer = window.setTimeout(() => {
-      if (cycle !== c || c.ended) return;
-      endCinema(c, false); maybeComplete(c);
-    }, c.reduced ? REDUCED_MS : INTRO_MS);
+    root.dataset.mode = c.returning ? 'returning' : 'cinematic'; root.dataset.motion = c.reduced ? 'reduced' : 'full'; root.dataset.cinema = 'orbit';
+    delete root.dataset.exiting; root.setAttribute('aria-busy', c.ready ? 'false' : 'true');
+    title.textContent = settings.title; detail.textContent = c.ready ? 'Your world is ready.' : settings.detail;
+    phase.textContent = c.failed ? 'LOADING STOPPED' : (c.ready ? 'READY' : 'LOADING');
+    retryButton.hidden = !c.failed; dock.querySelector('.cl-dock-text').textContent = 'Loading continues'; returnFocus = document.activeElement;
+    if (!c.skipped) reveal(); else { root.hidden = true; dock.hidden = false; }
     if (!c.ready && !c.failed) armLoading(c, settings.timeoutMs);
-    updateTime(); maybeComplete(c);
+    updateTime(); renderProgress(c); advance(c, performance.now());
   }
   function show(options) {
     const settings = Object.assign({}, defaults, options || {});
-    if (!cycle || cycle.ended) cycle = makeCycle(settings);
+    if (!cycle || cycle.ended) { cycle = makeCycle(settings); pendingProgress = 0; }
     const c = cycle;
     if (!document.body) {
       pendingOptions = settings;
-      if (!waitingForBody) {
-        waitingForBody = true;
-        document.addEventListener('DOMContentLoaded', () => {
-          waitingForBody = false;
-          if (cycle === c && !c.ended) startMountedCycle(c, pendingOptions || settings);
-          pendingOptions = null;
-        }, { once: true });
-      }
-      return;
+      if (!waitingForBody) { waitingForBody = true; document.addEventListener('DOMContentLoaded', () => {
+        waitingForBody = false; if (cycle === c && !c.ended) startMountedCycle(c, pendingOptions || settings); pendingOptions = null;
+      }, { once: true }); } return;
     }
     if (!c.mounted) { startMountedCycle(c, settings); return; }
     if (c.failed) resetForRetry(c);
-    syncTheme(); title.textContent = settings.title;
-    if (!c.ready) detail.textContent = settings.detail;
-    if (typeof settings.retry === 'function') c.retry = settings.retry;
-    if (!visible) reveal();
+    syncTheme(); title.textContent = settings.title; if (!c.ready) detail.textContent = settings.detail;
+    if (typeof settings.retry === 'function') c.retry = settings.retry; if (!visible) reveal();
   }
   function resetForRetry(c) {
-    cancelExit(c); clearTimeout(c.introTimer); clearLoadTimers(c);
-    c.ready = c.failed = false; c.readyAt = null;
-    c.returning = c.introDone = true; c.skipped = false;
-    c.startedAt = performance.now();
-    root.dataset.mode = 'returning'; root.dataset.cinema = 'settled'; root.dataset.state = 'loading';
+    stopCinema(c); stopFrame(c); clearLoadTimers(c);
+    c.ready = c.failed = c.skipped = false; c.readyAt = null; c.returning = true; c.scene = 'orbit';
+    c.measured = c.displayed = 0; c.lastNumber = -1; c.startedAt = performance.now();
+    root.dataset.mode = 'returning'; root.dataset.cinema = 'orbit'; root.dataset.state = 'loading'; root.setAttribute('aria-busy', 'true');
     retryButton.hidden = true; phase.textContent = 'TRYING AGAIN'; detail.textContent = 'Preparing the experiment…';
-    dock.querySelector('.cl-dock-text').textContent = 'Loading continues';
-    reveal(); updateTime(); armLoading(c, defaults.timeoutMs);
-    // Preserve the same pending completion promise across a retry.
+    dock.querySelector('.cl-dock-text').textContent = 'Loading continues'; reveal(); updateTime(); renderProgress(c); armLoading(c, defaults.timeoutMs);
   }
   function update(message) {
     if (pendingOptions) pendingOptions.detail = String(message);
     if (cycle && !cycle.ended && !cycle.ready && detail) detail.textContent = String(message);
   }
+  function progress(fraction) {
+    if (typeof fraction !== 'number' || !Number.isFinite(fraction)) return;
+    const value = Math.max(0, Math.min(1, fraction));
+    if (!cycle || cycle.ended) { pendingProgress = Math.max(pendingProgress, value); return; }
+    if (cycle.failed || cycle.ready) return;
+    cycle.measured = Math.max(cycle.measured, value); startFrame(cycle);
+  }
   function finish() {
     if (!cycle) return Promise.resolve();
-    const c = cycle;
-    if (c.ended) return c.promise;
-    if (!c.ready) c.readyAt = performance.now();
-    c.ready = true; c.failed = false; clearLoadTimers(c);
-    if (root) {
-      root.dataset.state = 'ready'; phase.textContent = 'READY';
-      detail.textContent = 'Your fly is ready.'; retryButton.hidden = true;
-      updateTime();
-    }
-    maybeComplete(c);
-    return c.promise;
+    const c = cycle; if (c.ended) return c.promise;
+    if (c.failed) return c.promise;
+    if (!c.ready) c.readyAt = performance.now(); c.ready = true; c.failed = false; c.measured = 1; clearLoadTimers(c);
+    if (root) { root.dataset.state = 'ready'; root.setAttribute('aria-busy', 'false'); phase.textContent = 'READY'; detail.textContent = 'Your world is ready.'; retryButton.hidden = true; updateTime(); }
+    advance(c, performance.now()); startFrame(c); return c.promise;
   }
   function fail(message, retry) {
     if (!cycle || cycle.ended) show({ title: 'A connection is missing.', detail: message });
-    const c = cycle;
-    c.ready = false; c.failed = true; c.readyAt = performance.now();
-    clearLoadTimers(c); clearTimeout(c.introTimer); cancelExit(c);
-    c.introDone = true;
-    c.retry = typeof retry === 'function' ? retry : null;
-    if (!root) {
-      pendingOptions = Object.assign({}, pendingOptions || defaults, { detail: String(message) });
-      return;
-    }
-    root.dataset.state = 'error'; root.dataset.cinema = 'settled';
-    phase.textContent = 'LOADING STOPPED';
-    detail.textContent = String(message || 'The experiment could not load. Please retry.');
-    retryButton.hidden = false; updateTime();
+    const c = cycle; c.ready = false; c.failed = true; c.readyAt = performance.now();
+    clearLoadTimers(c); stopCinema(c); stopFrame(c); c.scene = 'paused'; c.retry = typeof retry === 'function' ? retry : null;
+    if (!root) { pendingOptions = Object.assign({}, pendingOptions || defaults, { detail: String(message) }); return; }
+    root.dataset.state = 'error'; root.dataset.cinema = 'paused'; root.setAttribute('aria-busy', 'false'); phase.textContent = 'LOADING STOPPED';
+    detail.textContent = String(message || 'The experiment could not load. Please retry.'); retryButton.hidden = false; updateTime(); renderProgress(c);
     for (const button of root.querySelectorAll('button')) button.disabled = false;
-    dock.disabled = false;
-    dock.querySelector('.cl-dock-text').textContent = 'Loading needs attention';
-    if (visible) retryButton.focus({ preventScroll: true });
+    dock.disabled = false; dock.querySelector('.cl-dock-text').textContent = 'Loading needs attention'; if (visible) retryButton.focus({ preventScroll: true });
   }
   motionPreference.addEventListener('change', event => {
     if (!event.matches || !cycle || cycle.ended) return;
-    cycle.reduced = true;
-    if (cycle.exiting) cancelExit(cycle);
-    if (root) root.dataset.motion = 'reduced';
-    endCinema(cycle, false); maybeComplete(cycle);
+    cycle.reduced = true; stopCinema(cycle); cycle.scene = 'orbit';
+    if (root) { root.dataset.motion = 'reduced'; root.dataset.cinema = 'orbit'; }
+    advance(cycle, performance.now()); startFrame(cycle);
   });
-  window.ChanjLoader = Object.freeze({ show, update, finish, fail, hide });
+  window.ChanjLoader = Object.freeze({ show, update, progress, finish, fail, hide });
 }());

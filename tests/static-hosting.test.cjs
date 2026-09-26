@@ -47,6 +47,13 @@ test('root and nested sandbox entries resolve all assets without publishing feed
     }
     assert.ok(fs.readFileSync(path.join(output, 'embodied/sandbox/app.js'), 'utf8')
       .includes(`./replay.mjs?v=${result.version}`), 'The owned replay module shares the UI cache version');
+    assert.ok(fs.readFileSync(path.join(output, 'embodied/sandbox/app.js'), 'utf8')
+      .includes(`./preparation.mjs?v=${result.version}`), 'Preparation progress receives the same cache version');
+    assert.ok(fs.existsSync(path.join(output, 'assets/fonts/space-grotesk-bold.ttf')));
+    assert.ok(fs.existsSync(path.join(output, 'assets/fonts/OFL.txt')), 'The font license ships with the font');
+    const loaderCss = fs.readFileSync(path.join(output, 'loading.css'), 'utf8');
+    assert.ok(loaderCss.includes(`assets/fonts/space-grotesk-bold.ttf?v=${result.version}`),
+      'The locally hosted intro font is content-versioned and resolves relative to the root stylesheet');
     assert.match(html, /window\.CHANJ_STATIC_HOSTING=true/);
     assert.ok(!html.includes('cdn.jsdelivr.net'));
     assert.ok(!html.includes('fonts.googleapis.com'));

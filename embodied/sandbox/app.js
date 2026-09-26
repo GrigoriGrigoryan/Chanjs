@@ -6,13 +6,24 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { poseFrameAt, recordingPath } from './replay.mjs';
+import { preparationProgress } from './preparation.mjs';
 
 const $ = id => document.getElementById(id);
 const STATIC_HOSTING = window.CHANJ_STATIC_HOSTING === true;
+const qs = new URLSearchParams(location.search);
+const initialRecording = /^[0-9a-f]{10}$/.test(qs.get('run') || '') ? qs.get('run') : null;
+const preparationSteps = ['fly.json', 'fly_verts.bin', 'fly_faces.bin', 'walk.bin', 'neurons.bin',
+  'neuron_groups.bin', 'valence.json', 'brain_idx.bin', 'brain_rates.bin'].map(file => `assets/${file}`);
+if (initialRecording) {
+  const base = recordingPath(initialRecording, STATIC_HOSTING);
+  preparationSteps.push(...['run.json', 'poses.bin', 'spikes_idx.bin', 'spikes_cnt.bin'].map(file => `${base}/${file}`));
+}
+preparationSteps.push('scene', 'frame');
+const prepared = preparationProgress(preparationSteps, fraction => window.ChanjLoader?.progress?.(fraction));
 if (!STATIC_HOSTING && document.querySelector('.back-link')) document.querySelector('.back-link').href = '/feeding/';
 const loadNote = text => window.ChanjLoader?.update(text);
-const bin = (u, T) => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); }).then(b => new T(b));
-const json = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
+const bin = (u, T) => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); }).then(b => { const data = new T(b); prepared(u); return data; });
+const json = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); }).then(data => { prepared(u); return data; });
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const DEFAULT_FOOD = [30, 0], DEFAULT_DANGER = [15, 0];
 
@@ -200,7 +211,7 @@ function setProps(on) {
 }
 // ---------------------------------------------------------------- game mode (Props on): swatted = GAME OVER, apple = STAGE CLEAR
 const KILL_R = 2.5;                                  // mm from the danger centre
-const game = { over: null, t0: 0, contact: false, shake: 0, info: null };
+const game = { over: null, t0: 0, contact: false, shake: 0, info: null, overlayTimer: 0 };
 const splat = (() => {
   const sh = new THREE.Shape();
   for (let i = 0; i <= 28; i++) {
@@ -215,7 +226,8 @@ function endGame(kind, info) {
   if (game.over) return;
   Object.assign(game, { over: kind, t0: clock.elapsedTime, contact: false, info });
   if (kind === 'dead') paperAim.rotation.z = Math.atan2(info.at[1] - world.danger[1], info.at[0] - world.danger[0]);   // aim at the fly
-  setTimeout(() => showGameOverlay(kind), kind === 'dead' ? 1100 : 450);
+  clearTimeout(game.overlayTimer);
+  game.overlayTimer = setTimeout(() => showGameOverlay(kind), kind === 'dead' ? 1750 : 450);
 }
 function showGameOverlay(kind) {
   if (game.over !== kind) return;
@@ -223,10 +235,12 @@ function showGameOverlay(kind) {
   $('game').className = 'game ' + (kind === 'dead' ? 'lose' : 'win');
   $('game-title').textContent = kind === 'dead' ? 'GAME OVER' : 'STAGE CLEAR!';
   $('game-sub').innerHTML = kind === 'dead' ? `SWATTED AT ${i.t.toFixed(2)} S<br>${i.dist.toFixed(1)} MM FROM THE APPLE` : `APPLE REACHED IN ${i.t.toFixed(2)} S`;
-  $('game-again').textContent = mode === 'playback' ? '▶ REPLAY' : '▶ START AGAIN';
-  $('game-hint').textContent = mode === 'playback' ? 'replay of a real brain + physics run' : `next try uses seed ${+$('seed').value + 1} · sliders stay as set`;
+  const encounter = $('preset-newspaper')?.getAttribute('aria-pressed') === 'true';
+  $('game-again').textContent = mode === 'playback' ? '▶ REPLAY' : encounter ? '▶ REPLAY ENCOUNTER' : '▶ START AGAIN';
+  $('game-hint').textContent = mode === 'playback' ? 'replay of a real brain + physics run' : encounter ? 'Same scene · same seed · watch it again' : `next try uses seed ${+$('seed').value + 1} · sliders stay as set`;
 }
 function clearGame() {
+  clearTimeout(game.overlayTimer);
   game.over = null; game.contact = false; game.shake = 0; $('game').className = 'game hidden';
   flyRoot.scale.set(1, 1, 1); splat.visible = false; paperAim.rotation.z = 0;
 }
@@ -698,13 +712,17 @@ async function loadRecording(id) {
   enterPlayback();
 }
 let loadingRecording = false;
-async function openRecording(id) {
+async function openRecording(id, required = false) {
   if (loadingRecording) return;
   loadingRecording = true;
   for (const key of ['replay-baseline', 'replay-modulated']) if ($(key)) $(key).disabled = true;
   $('real-status').textContent = 'Loading recorded body poses and spike counts…';
   try { await loadRecording(id); }
-  catch (error) { $('real-status').textContent = 'Recording could not load. Check your connection and select it again.'; console.error(error); }
+  catch (error) {
+    $('real-status').textContent = 'Recording could not load. Check your connection and select it again.';
+    if (required) throw error; // A requested startup recording must not be reported as ready.
+    console.error(error);
+  }
   finally {
     loadingRecording = false;
     for (const key of ['replay-baseline', 'replay-modulated']) if ($(key)) $(key).disabled = false;
@@ -817,9 +835,10 @@ if ($('replay-baseline')) $('replay-baseline').onclick = () => openRecording('2e
 if ($('replay-modulated')) $('replay-modulated').onclick = () => openRecording('19be51902d');
 $('game-again').onclick = () => {
   if (mode === 'playback') { clearGame(); flyRoot.position.set(0, 0, 0); recT = 0; recPlaying = true; $('pb-play').textContent = '⏸ Pause'; return; }
+  if ($('preset-newspaper')?.getAttribute('aria-pressed') === 'true') { startNewspaperEncounter(); return; }
   $('seed').value = +$('seed').value + 1; markCustomSettings(); liveReset(); playing = true; $('play').textContent = '⏸ Pause';
 };
-$('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); setProps(!propsOn); };
+$('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); markCustomSettings(); setProps(!propsOn); };
 $('focus-btn').setAttribute('aria-pressed', String(focusOn));
 $('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); hud(); };
 $('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
@@ -839,16 +858,16 @@ $('cam-over').onclick = () => {
 
 // Controlled comparisons: only the reward setting differs between these scenes.
 // The measured lookup changes approach tendency, not a guaranteed route or win.
-function applyPreset(reward, label, start = true) {
+function applyPreset(reward, label, start = true, seed = 0) {
   if (mode === 'playback') exitPlayback();
   world.food = [...DEFAULT_FOOD]; world.danger = [...DEFAULT_DANGER];
-  for (const [id, value] of Object.entries({reward, punish: 0, oa: 0, danger: 1.6, heading: 0, seed: 0})) {
+  for (const [id, value] of Object.entries({reward, punish: 0, oa: 0, danger: 1.6, heading: 0, seed})) {
     $(id).value = value; $(id).dispatchEvent(new Event('input'));
   }
   setProps(true); placeObjects(); liveReset();
   if (!follow) $('cam-over').click();
   for (const [id, value] of [['preset-baseline', 0], ['preset-bold', 1], ['preset-cautious', -1]]) {
-    $(id)?.setAttribute('aria-pressed', String(start && value === reward));
+    $(id)?.setAttribute('aria-pressed', String(start && seed === 0 && value === reward));
   }
   if ($('preset-status')) $('preset-status').textContent = label;
   if (start && val) { playing = true; $('play').textContent = '⏸ Pause'; }
@@ -858,12 +877,20 @@ for (const [id, reward, label] of [
   ['preset-bold', 1, 'Bold running · stronger food-attraction signal, same scene.'],
   ['preset-cautious', -1, 'Cautious running · weaker food-attraction signal, same scene.']
 ]) if ($(id)) $(id).onclick = () => applyPreset(reward, label);
+function startNewspaperEncounter(start = true) {
+  applyPreset(1, 'Newspaper encounter · a seeded preview with the game layer on.', start, 1);
+  $('speed').value = '0.5';
+  $('preset-newspaper')?.setAttribute('aria-pressed', 'true');
+  $('cam-over').click();
+  document.dispatchEvent(new CustomEvent('chanj:encounter'));
+}
+if ($('preset-newspaper')) $('preset-newspaper').onclick = () => startNewspaperEncounter();
 if ($('reset-settings')) $('reset-settings').onclick = () => {
   applyPreset(0, 'Settings reset · press Start when you are ready.', false);
   $('speed').value = '0.5'; $('pb-speed').value = '0.25'; $('seconds').value = '6';
 };
 function markCustomSettings() {
-  for (const preset of ['preset-baseline', 'preset-bold', 'preset-cautious']) $(preset)?.setAttribute('aria-pressed', 'false');
+  for (const preset of ['preset-baseline', 'preset-bold', 'preset-cautious', 'preset-newspaper']) $(preset)?.setAttribute('aria-pressed', 'false');
   if ($('preset-status')) $('preset-status').textContent = 'Custom settings · watch how the movement changes.';
 }
 for (const id of ['reward', 'punish', 'oa', 'danger', 'heading', 'seed']) $(id).addEventListener('input', markCustomSettings);
@@ -885,7 +912,7 @@ window.sandboxDebug = {
 // ---------------------------------------------------------------- loop
 placeObjects(); liveReset();
 // Every fresh presentation opens with the newspaper. Explicit URL presets remain shareable.
-const qs = new URLSearchParams(location.search);
+prepared('scene');
 setProps(qs.get('props') !== '0');
 loadNote('Loading measured brain decisions and firing rates…');
 if (!await loadVal()) {
@@ -897,8 +924,8 @@ if (!await loadVal()) {
 for (const k of ['reward', 'punish', 'oa', 'danger', 'heading', 'seed']) if (qs.has(k)) { $(k).value = qs.get(k); $(k).dispatchEvent(new Event('input')); }
 if (qs.get('cam') !== 'follow') $('cam-over').click();
 liveReset();
-const runParam = qs.get('run');   // reopen a past real run: ?run=<id>
-if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await openRecording(runParam);
+if (qs.get('scene') === 'newspaper' && !initialRecording) startNewspaperEncounter(qs.get('autoplay') !== '0');
+if (initialRecording) await openRecording(initialRecording, true);
 let presentationReady = false;
 const clock = new THREE.Clock(); let hudT = 0, blinkT = 0;
 const flyPos = new THREE.Vector3();
@@ -955,6 +982,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 frame();
+prepared('frame');
 // Render a ready scene underneath the opening; simulation time starts after its reveal.
 await window.ChanjLoader?.finish();
 presentationReady = true; clock.start();
