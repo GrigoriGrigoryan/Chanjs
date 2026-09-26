@@ -179,7 +179,8 @@ function receive(e) {
     $('network-rate').textContent=`${Math.round(displayedCounts[2]*factor).toLocaleString()} / s`;
     displayedCounts=[0,0,0];rateDuration=0;
   }
-  $('input-rate').textContent=m.body.rates[1]?`${m.body.rates[0]} + ${m.body.rates[1]} Hz`:`${m.body.rates[0]} Hz`;
+  const inputRates=m.trial?[m.trial.sweetHz,m.trial.bitterHz]:m.body.rates;
+  $('input-rate').textContent=inputRates[1]?`${inputRates[0]} + ${inputRates[1]} Hz`:`${inputRates[0]} Hz`;
   $('angle').textContent=`${Math.round(m.body.joints.angle)}°`;
   $('instruction').textContent=m.body.contact?'Move the drop away to break contact.':'Drag the drop to the mouth.';
   document.body.dataset.contact=String(m.body.contact);
