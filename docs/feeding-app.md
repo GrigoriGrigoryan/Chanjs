@@ -10,7 +10,7 @@ To keep an offline copy, **[download fly-brain-feeding.zip](https://github.com/d
 
 No GitHub account, Git, terminal, installation, paid service or remote inference is needed to use the experiment. This repository is simply the project folder and its supporting files. You can ignore GitHub’s Code menu, branches, commits, Issues and Actions.
 
-![The running feeding experiment: a lateral fly, contact droplet and computed motor signals.](docs/experiment.jpg)
+![The running feeding experiment: a lateral fly, contact droplet and computed motor signals.](experiment.jpg)
 
 ## What the fly does
 
@@ -19,6 +19,7 @@ The drop activates identified labellar sugar receptors only when it touches the 
 - **Add bitter** stimulates the authors’ bitter receptor population alongside sugar. Suppression of MN9 is computed inside the network.
 - **Block taste** removes external stimulation. Existing neural activity can decay.
 - **Silence MN9** clamps those motor neurons at rest. Upstream taste activity continues while the proboscis returns to rest.
+- **State-dependent food offer** runs a fixed three-second safe or risky offer with a seeded, recorded internal-state manipulation. It records MN9-driven extension as `accept` or `withhold` and exports the trial records as JSON.
 - **Inspect the circuit** shows real spike events and live performance measurements.
 - **New trial** restores the resting model with a different random seed. Arrow keys move the droplet when the fly view is focused; Enter touches the mouth.
 
@@ -34,18 +35,20 @@ The body is held still, as in a feeding preparation. Walking, flight, grooming, 
 
 **Movement:** real MN9 spikes provide the only protraction drive. The anatomical role follows [McKellar et al., eLife 2020](https://elifesciences.org/articles/54978). Muscle gain, damping, spring return, drawing proportions and two-joint coupling are explicitly phenomenological. Boundary-contact oscillations arise from this modeled feedback loop; they are not validated feeding rhythms.
 
+**Modulatory state offers:** the optional assay stimulates named v630 dopamine or octopamine source populations with seeded tonic input. Their spikes drive a slow, bounded, decaying state variable that shifts the MN9 threshold. The source identities are derived from a pinned FlyWire v1.1.0 annotation export and mapped to the supplied v630 root IDs. The source-to-MN9 effect, its sign, gain, time constant, offer rates, and acceptance threshold are project-defined phenomenological assumptions recorded with each trial; this is not a receptor-expression map, hormone concentration model, or a claim about a real fly's emotional or physiological state.
+
 This is **not a complete functioning fly brain or a biologically exact digital animal**. It omits cell-specific physiology, graded signaling, gap junctions, receptor-specific transmission, neuromodulation, plasticity, metabolism and spontaneous activity. Whole-network inclusion is a statement about the supplied model’s graph, not whole-animal biological fidelity.
 
-[Model, sources and limits](https://dicnunz.github.io/fly-brain-feeding/about.html) · [Research and correspondence](docs/model-evidence.md) · [Validation](docs/validation.md)
+[Model, sources and limits](https://dicnunz.github.io/fly-brain-feeding/about.html) · [Research and correspondence](model-evidence.md) · [Validation](validation.md)
 
 ## Files and verification
 
-`index.html` opens the experiment. `model.js` computes neurons; `body.js` computes the mechanical readout; `app.js` connects them in a worker; `draw.js` renders the same body state. `data/` contains the complete offline graph, exact source hashes and attribution. `tools/prepare_data.py` reproduces the lossless packing from pinned source files.
+`index.html` opens the experiment. `model.js` computes neurons; `body.js` computes the mechanical readout; `app.js` connects them in a worker; `draw.js` renders the same body state. `data/` contains the complete offline graph, exact source hashes and attribution, plus the pinned modulation-group mapping in `data/modulators.js`. `tools/prepare_data.py` reproduces the lossless packing from pinned source files; `tools/prepare_modulators.py` regenerates the modulation mapping from its pinned annotation export.
 
-For developers, `node --test tests/*.test.cjs` runs the numerical, whole-network and closed-loop tests. No npm dependencies or build step are required. Tests compare the solver against dense integration and a Brian2 reference fixture, then check sensory and motor interventions on the actual dataset. Browser interaction and performance measurements are recorded separately in [validation](docs/validation.md).
+For developers, `node --test tests/*.test.cjs` runs the numerical, whole-network and closed-loop tests. No npm dependencies or build step are required. Tests compare the solver against dense integration and a Brian2 reference fixture, then check sensory and motor interventions on the actual dataset. Browser interaction and performance measurements are recorded separately in [validation](validation.md).
 
 ## Attribution and reuse
 
 Independent adaptation; no affiliation or endorsement. Source anatomy: [Dorkenwald et al.](https://www.nature.com/articles/s41586-024-07558-y), [Schlegel et al.](https://www.nature.com/articles/s41586-024-07686-5), and the FlyWire Consortium. Model: [Shiu and colleagues](https://github.com/philshiu/Drosophila_brain_model). Proboscis anatomy: McKellar and colleagues. The illustration is original; no scientific figures or third-party meshes are bundled.
 
-Original code and drawing: [MIT](LICENSE). The authors’ exact model files carry an MIT archive notice, while general FlyWire public-data guidelines specify CC BY-NC 4.0. Both notices are retained in [data/LICENSE](data/LICENSE). **Treat reuse of the included connectome as noncommercial.** The code license does not override data terms.
+Original code and drawing: [MIT](../LICENSE). The authors’ exact model files carry an MIT archive notice, while general FlyWire public-data guidelines specify CC BY-NC 4.0. Both notices are retained in [data/LICENSE](../data/LICENSE). **Treat reuse of the included connectome as noncommercial.** The code license does not override data terms.

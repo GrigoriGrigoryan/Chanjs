@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fly-sandbox",
+      "runtimeExecutable": ".venv/Scripts/python",
+      "runtimeArgs": ["sandbox_server.py"],
+      "port": 8765
+    }
+  ]
+}
