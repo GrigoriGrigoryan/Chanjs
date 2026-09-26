@@ -4,8 +4,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "redirects": [
-    { "source": "/sandbox", "destination": "/embodied/sandbox/", "permanent": false },
-    { "source": "/sandbox/", "destination": "/embodied/sandbox/", "permanent": false }
+    { "source": "/index.html", "destination": "/", "permanent": false },
+    { "source": "/sandbox", "destination": "/", "permanent": false },
+    { "source": "/sandbox/", "destination": "/", "permanent": false }
   ],
   "headers": [
     { "source": "/(.*)", "headers": [

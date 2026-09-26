@@ -29,7 +29,7 @@ const groupSize = meta.legend.map(l => l.count);
 // ---------------------------------------------------------------- renderer helper
 function makeView(el, { bloom, bg, zUp }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia('(max-width: 760px)').matches ? 1.25 : 1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
@@ -195,6 +195,7 @@ function setProps(on) {
   if (!on && game.over) clearGame();
   foodBall.visible = dangerBall.visible = dangerCloud.visible = particles.visible = !on;
   $('props-btn').classList.toggle('on', on);
+  $('props-btn').setAttribute('aria-pressed', String(on));
   try { localStorage.setItem('fly-sandbox-props', on ? '1' : '0'); } catch (e) {}
 }
 // ---------------------------------------------------------------- game mode (Props on): swatted = GAME OVER, apple = STAGE CLEAR
@@ -352,19 +353,47 @@ brainGeo.setAttribute('aGlow', new THREE.BufferAttribute(glow, 1));
 // decision focus: approach/avoid MBONs (1) and the dopamine neurons that weaken them (.6) are spotlighted
 const bDec = Float32Array.from(ngrp, g => (g === 6 || g === 7) ? 1 : (g === 4 || g === 5) ? .6 : 0);
 brainGeo.setAttribute('aDec', new THREE.BufferAttribute(bDec, 1));
+// blink = the path the chemical acts on, deeper for a bigger effect. Only the decision circuit + octopamine can blink
+// (many other neurons shift too). Depth = the knob's own neurons at |knob| (also when blocked, which stops release but
+// not spiking) or the rate change vs. the no-drug brain at the same odor, interpolated like the decision (lookup).
+const keyIdx = [], keySlot = new Int32Array(NN).fill(-1), chg = new Float32Array(NN);
+for (let i = 0; i < NN; i++) if (bDec[i] || ngrp[i] === 10) keySlot[i] = keyIdx.push(i) - 1;
+brainGeo.setAttribute('aChg', new THREE.BufferAttribute(chg, 1));
+const blinkCurrent = new Float32Array(keyIdx.length), blinkBaseline = new Float32Array(keyIdx.length);
+function updateBlink(k, odor) {
+  const cur = lookup(k.reward, k.punish, odor, blinkCurrent).key, base = lookup(0, 0, odor, blinkBaseline).key;
+  const src = { 4: k.reward, 5: k.punish, 10: k.octopamine };
+  // ponytail: |log rate ratio| - 0.2 (+10 Hz floor) is hand-tuned; spike noise stays below it, silencing/driving reaches 1
+  keyIdx.forEach((i, s) => { chg[i] = Math.max(Math.abs(src[ngrp[i]] || 0), clamp(Math.abs(Math.log((cur[s] + 10) / (base[s] + 10))) - .2, 0, 1)); });
+  brainGeo.attributes.aChg.needsUpdate = true;
+}
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+B.controls.autoRotate = !reduceMotion;   // uTime stays 0: steady highlight, no flashing
 const brainPts = new THREE.Points(brainGeo, new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uSize: { value: 20 * Math.min(devicePixelRatio, 2) }, uHalf: { value: ACT_HALF }, uFocus: { value: 1 } },
-  vertexShader: `attribute vec3 aColor; attribute vec4 aStyle; attribute float aGlow; attribute float aDec; uniform float uSize, uHalf, uFocus; varying vec3 vC;
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uSize: { value: 20 * Math.min(devicePixelRatio, 2) }, uHalf: { value: ACT_HALF }, uFocus: { value: 1 }, uTime: { value: 0 } },
+  vertexShader: `attribute vec3 aColor; attribute vec4 aStyle; attribute float aGlow; attribute float aDec; attribute float aChg; uniform float uSize, uHalf, uFocus, uTime; varying vec3 vC;
     void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_Position = projectionMatrix*mv;
       float level = aGlow / (aGlow + uHalf);
-      float big = 1. + uFocus * aDec * 1.6, dimRest = mix(1., mix(.2, 1., step(.01, aDec)), uFocus);
-      gl_PointSize = mix(aStyle.y, aStyle.w, level) * big * uSize / -mv.z;
-      vC = aColor * mix(aStyle.x, aStyle.z, level) * dimRest; }`,
+      float spot = max(aDec, aChg), big = 1. + uFocus * spot * 1.6, dimRest = mix(1., mix(.2, 1., step(.01, spot)), uFocus);
+      float on = step(fract(uTime * 2.), .5);   // 2 Hz on/off, under the 3 flashes/s photosensitivity limit
+      gl_PointSize = max(mix(aStyle.y, aStyle.w, level), aChg * aStyle.w) * big * uSize / -mv.z;
+      vC = aColor * max(mix(aStyle.x, aStyle.z, level), aChg * aStyle.z) * mix(1., mix(.12, 1., on), aChg) * dimRest; }`,
   fragmentShader: `varying vec3 vC; void main(){ vec2 d = gl_PointCoord - .5; float r = dot(d,d)*4.; if (r > 1.) discard;
       float a = 1. - r; gl_FragColor = vec4(vC * a * a, 1.); }`
 }));
 B.scene.add(brainPts);
 B.camera.position.set(0, 1.2, 13.5);
+// Themes change the stage lighting, never the scientific group colors.
+function applySceneTheme() {
+  const burgundy = document.documentElement.dataset.theme === 'burgundy';
+  const background = burgundy ? 0x1b1219 : 0x181512;
+  A.scene.background.setHex(background); A.scene.fog.color.setHex(background);
+  floor.material.color.setHex(burgundy ? 0x21191f : 0x211e19);
+  B.scene.background.setHex(burgundy ? 0x140e13 : 0x100f0d);
+  hemi.color.setHex(burgundy ? 0xe7cad8 : 0xeadccb);
+}
+applySceneTheme();
+window.addEventListener('chanj:themechange', applySceneTheme);
 
 // ---------------------------------------------------------------- decision focus: why did the fly decide?
 const DEC = meta.decision, decTypes = [...DEC.approach, ...DEC.avoid];
@@ -428,7 +457,7 @@ function updateFocus(d) {
 
 // legend + circuit strip
 const KEY = [1, 2, 3, 4, 5, 6, 7, 9, 10];
-$('brain-legend').innerHTML = '<div style="color:var(--muted);font-size:11px;margin-bottom:4px">group · mean rate</div>' +
+$('brain-legend').innerHTML = '<div style="color:var(--muted);font-size:11px;margin-bottom:4px">group · mean rate<br>blinking = changed by the drug vs. none<br>deeper blink = bigger change</div>' +
   KEY.map(k => `<div class="item"><span><span class="dot" style="background:${meta.legend[k].color}"></span>${meta.legend[k].name}</span><span id="lg${k}">–</span></div>`).join('');
 $('circuit').innerHTML = `<svg viewBox="0 0 640 158" font-family="Inter" font-size="11">
   <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8b97ad"/></marker>
@@ -472,12 +501,14 @@ function placeObjects() {
 // ---------------------------------------------------------------- live model (mirrors run.py)
 function frac(arr, v) { v = clamp(v, arr[0], arr[arr.length - 1]); let i = 0; while (i < arr.length - 2 && v > arr[i + 1]) i++; return [i, (v - arr[i]) / (arr[i + 1] - arr[i])]; }
 const P = (ri, pi, oi) => val.points[(ri * K.length + pi) * OD.length + oi];
-function lookup(reward, punish, odor) {
+function lookup(reward, punish, odor, key = null) {
   const [ri, rt] = frac(K, reward), [pi, pt] = frac(K, punish), [oi, ot] = frac(OD, odor);
-  const out = { approach: 0, avoid: 0, pam: 0, ppl1: 0 };
+  if (key) key.fill(0);
+  const out = { approach: 0, avoid: 0, pam: 0, ppl1: 0, key };
   for (const [a, wa] of [[ri, 1 - rt], [ri + 1, rt]]) for (const [b, wb] of [[pi, 1 - pt], [pi + 1, pt]]) for (const [c, wc] of [[oi, 1 - ot], [oi + 1, ot]]) {
     const p = P(a, b, c), w = wa * wb * wc; if (!w) continue;
     out.approach += w * p.approach; out.avoid += w * p.avoid; out.pam += w * p.pam_mean; out.ppl1 += w * p.ppl1_mean;
+    if (key) for (let s = 0; s < key.length; s++) key[s] += w * p.key[s];
   }
   return out;
 }
@@ -493,7 +524,8 @@ async function loadVal() {
       const mean = f => { const x = tr.filter(([k]) => f(k)).map(([, y]) => y); return x.reduce((a, b) => a + b, 0) / Math.max(x.length, 1); };
       p.pam_mean = mean(k => k.startsWith('PAM')); p.ppl1_mean = mean(k => k.startsWith('PPL1'));
       const sum = new Float64Array(meta.legend.length);
-      for (let j = p.sparse[0]; j < p.sparse[0] + p.sparse[1]; j++) sum[ngrp[bi[j]]] += br[j];
+      p.key = new Float32Array(keyIdx.length);    // dense rates of the neurons that can blink
+      for (let j = p.sparse[0]; j < p.sparse[0] + p.sparse[1]; j++) { sum[ngrp[bi[j]]] += br[j]; if (keySlot[bi[j]] >= 0) p.key[keySlot[bi[j]]] = br[j]; }
       p.groupRate = Array.from(sum, (x, g) => x / Math.max(groupSize[g], 1));
     }
     [val, bidx, brates, K, OD] = [v, bi, br, v.knob, v.odor_hz];
@@ -754,7 +786,9 @@ A.renderer.domElement.addEventListener('pointermove', e => {
   pick(e); const p = new THREE.Vector3();
   if (ray.ray.intersectPlane(groundPlane, p)) { world[dragging] = [clamp(p.x, -60, 60), clamp(p.y, -60, 60)]; placeObjects(); }
 });
-A.renderer.domElement.addEventListener('pointerup', () => { if (dragging) { dragging = null; A.controls.enabled = true; liveReset(); } });
+const endDrag = () => { if (dragging) { dragging = null; A.controls.enabled = true; liveReset(); } };
+A.renderer.domElement.addEventListener('pointerup', endDrag);
+A.renderer.domElement.addEventListener('pointercancel', endDrag);
 
 // ---------------------------------------------------------------- controls
 const fmt = v => (v > 0 ? '+' : '') + (+v).toFixed(2);
@@ -786,15 +820,16 @@ $('game-again').onclick = () => {
   $('seed').value = +$('seed').value + 1; liveReset(); playing = true; $('play').textContent = '⏸ Pause';
 };
 $('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); setProps(!propsOn); };
-$('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); hud(); };
+$('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); hud(); };
 $('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
 $('pb-play').onclick = () => { if (game.over) { clearGame(); recT = 0; } if (recT >= rec.rows.length * 0.025 - 0.01) { recT = 0; } recPlaying = !recPlaying; $('pb-play').textContent = recPlaying ? '⏸ Pause' : '▶ Play recording'; };
 $('pb-live').onclick = exitPlayback;
 $('pb-scrub').addEventListener('input', e => { if (game.over) { clearGame(); flyRoot.position.set(0, 0, 0); } recPlaying = false; $('pb-play').textContent = '▶ Play recording'; recT = +e.target.value / 1000 * rec.rows.length * 0.025; });
 let follow = true;
-$('cam-follow').onclick = () => { follow = true; $('cam-follow').classList.add('on'); $('cam-over').classList.remove('on'); };
+$('cam-follow').onclick = () => { follow = true; $('cam-follow').classList.add('on'); $('cam-over').classList.remove('on'); $('cam-follow').setAttribute('aria-pressed', 'true'); $('cam-over').setAttribute('aria-pressed', 'false'); };
 $('cam-over').onclick = () => {
   follow = false; $('cam-over').classList.add('on'); $('cam-follow').classList.remove('on');
+  $('cam-follow').setAttribute('aria-pressed', 'false'); $('cam-over').setAttribute('aria-pressed', 'true');
   const xs = [0, world.food[0], world.danger[0]], ys = [0, world.food[1], world.danger[1]];
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 14;
@@ -817,17 +852,25 @@ window.sandboxDebug = {
 
 // ---------------------------------------------------------------- loop
 placeObjects(); liveReset();
-try { if (localStorage.getItem('fly-sandbox-props') === '1') setProps(true); } catch (e) {}
+// Every fresh presentation opens with the newspaper. Explicit URL presets remain shareable.
+const qs = new URLSearchParams(location.search);
+setProps(qs.get('props') !== '0');
 loadNote('Loading measured brain decisions and firing rates…');
 if (!await loadVal()) {
   setStartReady(false);
   if (STATIC_HOSTING) throw new Error('The measured brain table could not load. Check your connection and retry.');
   const poll = setInterval(async () => { if (await loadVal()) { clearInterval(poll); setStartReady(true); } }, 20000);
-}
-const runParam = new URLSearchParams(location.search).get('run');   // reopen a past real run: ?run=<id>
+} else setStartReady(true);
+// Stage presets, e.g. ?heading=180&reward=0&seed=0&props=1
+for (const k of ['reward', 'punish', 'oa', 'danger', 'heading', 'seed']) if (qs.has(k)) { $(k).value = qs.get(k); $(k).dispatchEvent(new Event('input')); }
+if (qs.get('cam') !== 'follow') $('cam-over').click();
+liveReset();
+const runParam = qs.get('run');   // reopen a past real run: ?run=<id>
 if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await openRecording(runParam);
+if (val && mode === 'live' && qs.get('autoplay') !== '0') $('play').click();
 window.ChanjLoader?.finish();
-const clock = new THREE.Clock(); let hudT = 0;
+document.dispatchEvent(new CustomEvent('chanj:ready', { detail: { autoplay: playing, props: propsOn, mode } }));
+const clock = new THREE.Clock(); let hudT = 0, blinkT = 0;
 const flyPos = new THREE.Vector3();
 function frame() {
   const rdt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
@@ -843,8 +886,17 @@ function frame() {
   const simDt = mode === 'live' && playing ? rdt * +$('speed').value : 0;   // playback decays per recorded window
   if (simDt > 0) { const k = Math.exp(-simDt / ACT_TAU); for (let i = 0; i < NN; i++) glow[i] *= k; }
   brainGeo.attributes.aGlow.needsUpdate = true;
+  // Blink strength follows the data at 12.5 Hz; the shader animates smoothly between updates.
+  // Hidden mobile panels need no GPU upload or interpolation work.
+  const brainVisible = $('brainview').clientWidth > 0;
+  if ((blinkT += rdt) >= .08 && val && brainVisible) {
+    blinkT = 0;
+    if (mode === 'live') updateBlink(ui.knobs, live.orn);
+    else updateBlink(rec.params, recRow(recT).orn_hz ?? 40);
+  }
+  brainPts.material.uniforms.uTime.value = reduceMotion ? 0 : t;
   // ambience
-  odorMat.uniforms.uTime.value = t;
+  odorMat.uniforms.uTime.value = reduceMotion ? 0 : t;
   dangerCloud.material.opacity = 0.07 + 0.03 * Math.sin(t * 2.2);
   foodBall.scale.setScalar(1 + 0.04 * Math.sin(t * 3));
   const rad = 1.2 + ui.knobs.danger * 1.6;
@@ -864,10 +916,10 @@ function frame() {
   beacon.material.opacity = clamp((A.camera.position.distanceTo(flyPos) - 14) / 30, 0, 0.75) * (0.75 + 0.25 * Math.sin(t * 4));
   A.controls.update(); B.controls.update();
   const shakeOff = new THREE.Vector3();
-  if (game.shake > .01) { shakeOff.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(game.shake); game.shake *= Math.exp(-rdt / .12); }
+  if (!reduceMotion && game.shake > .01) { shakeOff.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(game.shake); game.shake *= Math.exp(-rdt / .12); }
   A.camera.position.add(shakeOff);
-  A.composer.render();
-  if ($('brainview').clientWidth > 0) { B.composer.render(); labelRenderer.render(B.scene, B.camera); }   // skip hidden brain
+  if ($('arena').clientWidth > 0) A.composer.render();
+  if (brainVisible) { B.composer.render(); labelRenderer.render(B.scene, B.camera); }   // skip hidden brain
   A.camera.position.sub(shakeOff);
   if ((hudT += rdt) > 0.08) { hudT = 0; hud(); }
   requestAnimationFrame(frame);

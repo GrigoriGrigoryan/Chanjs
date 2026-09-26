@@ -1,41 +1,60 @@
-# Loading atlas
+# Escape the newspaper
 
-`loading.js` and `loading.css` provide the shared Chanjs startup overlay. The design is an original, code-authored atlas plate: a bilateral fly with wing veins, jointed legs, segmented abdomen, and a schematic circuit inset. Cream strokes assemble over a dark registration grid; vermilion identifies the head, annotations, and a slow scan line. The artwork uses inline SVG and CSS only. It requires no image, font, library, shader, or remote request.
+The Chanjs introduction is an original editorial scene: oversized CHANJ lettering, a tactile hand holding a rolled newspaper, and a small illustrated fly that escapes the sweep and passes behind the letters. It uses the selected orange (`#FF632D`) or burgundy (`#751B3B`) theme. The small caption reads “Illustrated introduction.” This is decorative storytelling, not a neural visualization, scientific recording, or model result.
 
-The fly and the inset are schematic decoration, not measured anatomy, FlyWire coordinates, neural activity, or a simulation result. The visible caption states “Original illustration · not neural activity.” The scan and line assembly never represent loading progress. No proprietary reference artwork or source code was reused. The visual assets were authored for this implementation; there are no external media attribution obligations.
+The composition appears immediately through HTML, CSS, and an inline SVG fly. A code-native rolled-paper silhouette remains available while the optional photographic cutout loads, or if it fails. The newspaper sweep, letter reactions, fly route, and wingbeat use CSS animation; there is no second WebGL renderer. Animations never represent loading progress.
 
-## Integration
+## Readiness and API
 
-Load `loading.css` and the classic `loading.js` script before the experiment scripts. For the sandbox, use the matching relative root paths. Call `show` before starting resource loading, `update` at actual work boundaries, and `finish` only when the experiment is ready. Call `fail` after any legacy code that disables all page buttons, so retry and hide remain usable.
+Load `loading.css` and the classic `loading.js` script before starting the experiment. The script derives the image URL from its own URL, so both the root entry and `/embodied/sandbox/` resolve the same artwork, including when the entry uses a `<base>` element.
 
 ```js
 ChanjLoader.show({
-  title: 'From cells to motion.',
-  detail: 'Loading the experiment…',
+  title: 'A tiny fly. A whole world.',
+  detail: 'Loading fly geometry and measured decision tables…',
   timeoutMs: 45000
 });
-ChanjLoader.update('Unpacking the network…');
-// In the real readiness callback:
+ChanjLoader.update('Preparing the measured decision table…');
+// Called by actual application readiness:
 ChanjLoader.finish();
-// In the error handler:
-ChanjLoader.fail('The network could not load. Please retry.');
+// Called by the application error handler:
+ChanjLoader.fail('The experiment could not load. Please retry.');
 ```
 
-`show` also accepts a `retry` callback, and `fail(message, retry)` accepts the same callback. If no callback is provided, Retry reloads the current URL. `hide()` closes the overlay and leaves a compact status button that reopens it; loading continues. Escape performs the same action. `finish()` hides both overlay and status button immediately, stops timers, and restores focus when appropriate. It imposes no minimum viewing duration.
+The API remains `show`, `update`, `finish`, `fail`, and `hide`. `show` accepts an optional `retry` function; `fail(message, retry)` accepts the same callback. Retry reloads the current URL if no callback is provided. Call `fail` after legacy code that disables all page buttons so the introduction controls remain usable.
 
-Elapsed time is measured using `performance.now()`, never estimated from animation. After the configurable timeout, the status says loading is taking longer and offers Retry while remaining receptive to a later successful readiness event. A reported failure stops the elapsed timer. No percentage is fabricated.
+`finish()` removes the overlay and its minimized status button immediately and stops the timer. There is no minimum viewing duration or delay waiting for the artwork or the animation. When initialization is fast, the introduction may only appear briefly.
 
-## Accessibility and responsive behavior
+Elapsed time uses `performance.now()`. After the configured timeout the overlay says that loading is taking longer and offers Retry, while still accepting a later successful finish. An explicit failure stops the timer and pauses the decorative motion. Hide and Escape leave initialization running and expose a compact status button for reopening it.
 
-The overlay has a labeled dialog, a polite live status region, and a timer that does not announce every tick. Keyboard focus stays within visible controls; Escape always hides the overlay. Buttons are at least 44px high. `prefers-reduced-motion: reduce` removes all decorative animation and transitions. At narrow widths the composition stacks; vertical scrolling keeps controls available for longer errors. There is no horizontal overflow at 320px.
+## Theme and accessibility
 
-## Verification, 26 September 2026
+The loader reads `document.documentElement.dataset.theme`, then `?theme=orange|burgundy`, then the `chanj-theme` localStorage value. It follows root theme attribute changes and `chanj:themechange` events. It does not overwrite the user's theme setting.
+
+The overlay is a labeled dialog with a polite status region and a timer that does not announce every tick. All decorative scene content is hidden from assistive technology. Focus cycles through the visible controls. Escape hides the overlay. Buttons are at least 44px high. `prefers-reduced-motion: reduce` turns off all animation and transitions and presents a still composition. Small screens use a tighter scene crop, and the overlay permits vertical scrolling if an error requires extra room.
+
+## Artwork provenance
+
+The hand/newspaper cutout was generated for this implementation using the **built-in ImageGen tool**, following the ImageGen skill. No external photography, stock image, brand, newspaper masthead, or reference artwork was reused. The print is abstract texture and contains no intended readable text or science claims.
+
+- Runtime asset: `assets/loading/newspaper-hand.webp` — 1200 × 800, transparent alpha, 77,096 bytes.
+- Preserved generated source: `assets/loading/source/newspaper-hand-alpha.png` — 1536 × 1024, alpha PNG, copied unchanged from the selected ImageGen result.
+- Complete generation prompt, refinement prompt, tool mode, original source path, and processing record: `assets/loading/source/generation-provenance.json`.
+
+The initial prompt requested a single adult hand and forearm holding a rolled newspaper, diagonally composed for a sweep from the lower right, with tactile studio lighting, abstract newsprint, and a transparent background. A subsequent ImageGen edit requested removing any surrounding haze while preserving the hand, paper, anatomy, gesture, and colors. The selected source was inspected and confirmed to have an alpha channel. Transparent pixels retain color values in the PNG, but those values are not visible when alpha is composited correctly.
+
+Sharp only resized the selected image and encoded WebP (quality 82, alpha quality 100). It did not retouch, composite, or threshold the alpha. The original PNG remains alongside its provenance. The fly, dotted route, fallback newspaper, and typography are newly authored inline SVG/CSS/HTML.
+
+## Validation — 27 September 2026
 
 - `node --check loading.js` passed.
-- Isolated loader visually inspected in the Codex in-app browser at 1280 × 720 and 320 × 640. The 320px document and loader scroll widths were both 320px; the hide button measured 44px high.
-- Exercised Hide, reopen, Escape, immediate completion, explicit failure, successful retry, and the still-waiting state with a shortened test timeout. The clock continued across hide/reopen; successful completion removed both overlay and status button.
-- Integrated feeding page inspected at 320 × 640. It reached `body.dataset.ready === 'true'` and hid the loader after network initialization. Document scroll width stayed 320px, and all experiment buttons measured 44px high.
-- Ran a fixed feeding offer to completion in that mobile viewport. The populated trial log measured 296px in both layout width and scroll width, with no overflow. Browser warning/error capture was empty.
-- Reduced-motion handling was inspected in source; the system preference was not changed for this check. No claim is made that the SVG is anatomically or scientifically validated.
+- Inspected both themes in Chrome at 1280 × 720 and 320 × 640 using a local display fixture with current source.
+- At 320 × 640, document and loader scroll widths were 320px, loader height was 640px, and the hide button was 44px high. The actual loading status and elapsed clock remained visible.
+- Verified that the generated WebP loaded and `data-art` became `ready`; transparent edges composited cleanly on both backgrounds.
+- Exercised Hide, reopening from the status button, Escape, completion, explicit failure, successful retry, and the still-waiting timeout state. Completion immediately removed both the dialog and minimized status button. Browser warning/error capture was empty.
+- Reviewed reduced-motion CSS and missing-image fallback in source; the OS preference was not changed and an image-fetch failure was not injected during this fixture check.
+- Saved four viewport screenshots under the deployment chat's `outputs/qa/`: `loading-orange-desktop.png`, `loading-orange-mobile.png`, `loading-burgundy-desktop.png`, and `loading-burgundy-mobile.png`.
 
-At the check above, the unminified loader totaled 21,731 bytes (JavaScript 12,920; CSS 8,811), approximately 7,126 bytes when the two files were gzipped separately. No media downloads are added.
+The fixture deliberately stays visible for design review. Its elapsed clock records fixture viewing time, not production load performance. No production delay was added for screenshots. Temporary browser viewport overrides were reset afterward.
+
+The unminified loader code totals 25,641 bytes (12,063 JavaScript + 13,578 CSS), approximately 7,916 bytes when separately gzipped. With the 77,096-byte WebP, the runtime addition is approximately 85KB transferred before protocol overhead. The preserved PNG source is not requested by the loader.

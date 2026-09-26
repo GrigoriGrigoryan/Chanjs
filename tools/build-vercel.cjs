@@ -2,7 +2,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT_FILES = ['index.html', 'about.html', 'style.css', 'model.js', 'body.js', 'draw.js', 'app.js', 'LICENSE'];
+// The public presentation is the embodied sandbox. Preserve the feeding
+// experiment in source, but do not upload its 61 MB network or frontend.
+const ROOT_FILES = ['LICENSE'];
 const OPTIONAL_FILES = ['loading.js', 'loading.css'];
 const THREE_ENTRIES = ['build/three.module.js', ...[
   'controls/OrbitControls.js', 'postprocessing/EffectComposer.js', 'postprocessing/RenderPass.js',
@@ -22,9 +24,10 @@ function filesUnder(root, relative, extensions) {
 
 function staticFiles(root) {
   const files = [...ROOT_FILES, ...OPTIONAL_FILES.filter(p => fs.existsSync(path.join(root, p))),
-    'data/connectome.js', 'data/modulators.js', 'data/metadata.json', 'data/LICENSE',
+    'data/LICENSE',
     ...filesUnder(root, 'docs', ['.md', '.jpg', '.png']),
-    ...filesUnder(root, 'assets/loading', ['.webp', '.avif', '.png', '.jpg', '.jpeg', '.svg']),
+    ...filesUnder(root, 'assets/loading', ['.webp', '.avif', '.png', '.jpg', '.jpeg', '.svg'])
+      .filter(file => !file.startsWith(path.join('assets', 'loading', 'source') + path.sep)),
     ...filesUnder(root, 'embodied/sandbox', ['.html', '.js', '.mjs', '.css', '.json', '.bin'])];
   for (const id of ['2ea7f28129', '19be51902d', '313e0f37bc']) {
     for (const name of ['run.json', 'poses.bin', 'spikes_idx.bin', 'spikes_cnt.bin']) files.push(`embodied/results/sandbox/${id}/${name}`);
@@ -76,12 +79,16 @@ function build(root, output) {
   html = html.replace(/<link\b[^>]*href=["']https:\/\/fonts\.googleapis\.com[^>]*>\s*/g, '');
   html = html.replace('</head>', '<script>window.CHANJ_STATIC_HOSTING=true;</script>\n</head>');
   fs.writeFileSync(sandboxPath, html);
+  // Modules and fetch() calls retain their sandbox-relative paths when the
+  // sandbox is opened at /. The original nested entry stays available.
+  const rootHtml = html.replace(/<head\b[^>]*>/i, '$&\n<base href="/embodied/sandbox/">');
+  fs.writeFileSync(path.join(output, 'index.html'), rootHtml);
   let bytes = 0;
   const walk = dir => { for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
     const file = path.join(dir, entry.name); if (entry.isDirectory()) walk(file); else bytes += fs.statSync(file).size;
   }};
   walk(output);
-  console.log(`Static presentation: ${files.length} project files + ${vendorCount} three modules; ${(bytes / 1e6).toFixed(2)} MB.`);
+  console.log(`Static presentation: ${files.length} project files + root sandbox entry + ${vendorCount} three modules; ${(bytes / 1e6).toFixed(2)} MB.`);
   console.log('Instant preview and recorded runs enabled. Full Python/MuJoCo jobs are not deployed.');
   return {files, bytes, vendorCount};
 }
