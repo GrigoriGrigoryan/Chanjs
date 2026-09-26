@@ -1,4 +1,6 @@
 .DS_Store
 *.zip
 node_modules/
+dist/
+.vercel/
 __pycache__/

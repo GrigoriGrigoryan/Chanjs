@@ -2,10 +2,22 @@
 Serves sandbox/ and runs full brain+physics simulations (run.py --record) one at a time."""
 import json, pathlib, re, subprocess, sys, threading, uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 ROOT = pathlib.Path(__file__).parent.resolve()
 STATIC = ROOT / "sandbox"
 RUNS = ROOT / "results" / "sandbox"
+# Shared presentation resources are exact mappings. Never expose ROOT.parent
+# as a general static directory: it can contain local environments and data.
+SHARED_FILES = {f"/{name}": ROOT.parent / name for name in ("loading.js", "loading.css")}
+FEEDING_FILES = (
+    "index.html", "about.html", "style.css", "model.js", "body.js", "draw.js", "app.js",
+    "loading.js", "loading.css", "LICENSE", "data/connectome.js", "data/modulators.js",
+    "data/metadata.json", "data/LICENSE", "docs/feeding-app.md", "docs/model-evidence.md",
+    "docs/validation.md", "docs/deployment.md", "docs/experiment.jpg",
+)
+SHARED_FILES.update({f"/feeding/{name}": ROOT.parent / name for name in FEEDING_FILES})
+SHARED_FILES["/feeding/"] = ROOT.parent / "index.html"
 LIMITS = {"reward": (-1, 1), "punish": (-1, 1), "octopamine": (-1, 1), "danger": (0, 4),
           "seconds": (1, 10), "seed": (0, 10**6)}
 jobs, lock = {}, threading.Lock()
@@ -55,6 +67,10 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def translate_path(self, path):
+        shared = SHARED_FILES.get(urlsplit(path).path)
+        return str(shared) if shared is not None else super().translate_path(path)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
@@ -68,6 +84,17 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        # Keep the original feeding page's relative links and sandbox shortcut
+        # working when both experiences share this local server.
+        route = urlsplit(self.path)
+        redirects = {"/feeding": "/feeding/", "/about.html": "/feeding/about.html",
+                     "/feeding/embodied/sandbox/": "/", "/feeding/embodied/sandbox": "/"}
+        if route.path in redirects:
+            self.send_response(302)
+            self.send_header("Location", redirects[route.path] + (f"?{route.query}" if route.query else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         m = re.fullmatch(r"/api/run/([0-9a-f]{10})", self.path)
         if m:
             return self.send_json(status(m.group(1)))

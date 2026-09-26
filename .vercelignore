@@ -1,0 +1,16 @@
+.git/
+.vercel/
+.env
+.env.*
+**/.env
+**/.env.*
+node_modules/
+dist/
+.venv/
+work/
+outputs/
+embodied/data/
+embodied/__pycache__/
+embodied/results/*.mp4
+embodied/results/*/*.mp4
+embodied/results/*/*.png

@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fly Brain Sandbox</title>
+<title>CHANJ · Fly brain sandbox</title>
+<meta name="description" content="Explore a FlyWire brain and fly body: measured-table instant preview and clearly labelled recorded Python/MuJoCo runs.">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
@@ -109,60 +111,71 @@ select,input[type=number]{font:13px Inter,sans-serif;color:var(--text);backgroun
 .reached{color:var(--approach)!important}
 @media (max-width:1100px){.app{grid-template-columns:1fr!important;grid-template-rows:auto 60vh 60vh;height:auto}.splitter{display:none}html,body{overflow:auto}}
 </style>
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="../../loading.css">
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
 "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
 </script>
 </head>
 <body>
+<script src="../../loading.js"></script>
+<script>window.ChanjLoader?.show({title:'From a circuit to a world.',detail:'Loading fly geometry, measured brain tables and the 3D renderer'});</script>
+<nav class="mobile-nav" aria-label="Sandbox views"><a href="#arena">Arena</a><a href="#brainview">Brain</a><a href="#controls">Controls</a></nav>
 <div class="app">
-  <aside class="panel">
-    <h1>Fly Brain Sandbox</h1>
+  <aside class="panel" id="controls">
+    <a class="back-link" href="../../index.html">← Feeding experiment</a>
+    <h1>CHANJ <span> / brain sandbox</span></h1>
     <div class="sub">FlyWire connectome · 138,639 spiking neurons · NeuroMechFly body</div>
 
     <h2>Neuromodulators</h2>
-    <div class="knob"><div class="row"><label><span class="dot" style="background:var(--pam)"></span>Reward dopamine (PAM)</label><span class="val" id="v-reward">0.00</span></div>
+    <div class="knob"><div class="row"><label for="reward"><span class="dot" style="background:var(--pam)"></span>Reward dopamine (PAM)</label><span class="val" id="v-reward">0.00</span></div>
       <input type="range" id="reward" min="-1" max="1" step="0.05" value="0">
       <div class="hint">−1 release blocked · 0 natural · +1 driven 50 Hz</div></div>
-    <div class="knob"><div class="row"><label><span class="dot" style="background:var(--ppl1)"></span>Punishment dopamine (PPL1)</label><span class="val" id="v-punish">0.00</span></div>
+    <div class="knob"><div class="row"><label for="punish"><span class="dot" style="background:var(--ppl1)"></span>Punishment dopamine (PPL1)</label><span class="val" id="v-punish">0.00</span></div>
       <input type="range" id="punish" min="-1" max="1" step="0.05" value="0">
       <div class="hint">−1 blocked (hunger-like) · +1 driven</div></div>
-    <div class="knob"><div class="row"><label><span class="dot" style="background:#ffe03c"></span>Octopamine (OA-VPM4)</label><span class="val" id="v-oa">0.00</span></div>
+    <div class="knob"><div class="row"><label for="oa"><span class="dot" style="background:#ffe03c"></span>Octopamine (OA-VPM4)</label><span class="val" id="v-oa">0.00</span></div>
       <input type="range" id="oa" min="-1" max="1" step="0.05" value="0">
       <div class="hint">arousal: faster walking (assumed gain)</div></div>
 
     <h2>Arena</h2>
-    <div class="knob"><div class="row"><label><span class="dot" style="background:var(--danger)"></span>Danger smell strength</label><span class="val" id="v-danger">1.60</span></div>
+    <div class="knob"><div class="row"><label for="danger"><span class="dot" style="background:var(--danger)"></span>Danger smell strength</label><span class="val" id="v-danger">1.60</span></div>
       <input type="range" id="danger" min="0" max="3" step="0.05" value="1.6"></div>
-    <div class="knob"><div class="row"><label>Start heading</label><span class="val" id="v-heading">0°</span></div>
+    <div class="knob"><div class="row"><label for="heading">Start heading</label><span class="val" id="v-heading">0°</span></div>
       <input type="range" id="heading" min="-180" max="180" step="5" value="0"></div>
     <div class="btns"><button id="reset-pos">Reset positions</button><button id="rand-heading">Random heading</button></div>
     <div class="note">Drag the <b style="color:var(--food)">orange food</b> and the <b style="color:var(--danger)">blue danger</b> in the 3D arena.</div>
 
-    <h2>Live preview</h2>
+    <h2>Instant preview</h2>
     <div class="btns">
       <button class="primary" id="play">▶ Start</button><button id="reset">↺ Reset</button>
-      <select id="speed"><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option></select>
+      <select id="speed" aria-label="Instant preview speed"><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option></select>
     </div>
-    <div class="note">Instant. The brain's decision comes from the real spiking brain, pre-measured at 100 settings. The body is an animated approximation.</div>
+    <div class="note">Measured from the spiking model at 100 settings, then interpolated here. Body motion is an animated approximation; activity dots are sampled from measured rates.</div>
 
-    <h2>Real simulation</h2>
-    <div class="btns" style="align-items:center"><span style="color:var(--muted);font-size:12.5px">seed</span><input type="number" id="seed" value="0" min="0" style="width:74px">
-      <span style="color:var(--muted);font-size:12.5px">seconds</span><input type="number" id="seconds" value="6" min="1" max="10" style="width:58px"></div>
+    <h2>Recorded experiments</h2>
+    <div class="btns replay-choices"><button id="replay-baseline">Replay baseline</button><button id="replay-modulated">Replay modulated</button></div>
+    <p class="note">Previously computed full-brain + MuJoCo runs. Playback does not recompute the experiment. Each replay restores its recorded settings.</p>
+    <h2>New full simulation</h2>
+    <div class="btns" style="align-items:center"><span style="color:var(--muted);font-size:12.5px">seed</span><input type="number" id="seed" aria-label="Simulation seed" value="0" min="0" style="width:74px">
+      <span style="color:var(--muted);font-size:12.5px">seconds</span><input type="number" id="seconds" aria-label="Simulation duration in seconds" value="6" min="1" max="10" style="width:58px"></div>
     <div style="margin-top:10px"><button class="real" id="run-real">Run real simulation (~7 min)</button></div>
     <div class="progress"><div id="prog"></div></div>
     <div class="status" id="real-status">Full brain + MuJoCo physics, exactly your current setup.</div>
     <div class="playback" id="playback">
-      <div class="btns"><button class="primary" id="pb-play">▶ Play recording</button><button id="pb-live">Back to live</button>
-        <select id="pb-speed"><option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option></select></div>
-      <input type="range" id="pb-scrub" min="0" max="1000" value="0">
+      <div class="btns"><button class="primary" id="pb-play">▶ Play recording</button><button id="pb-live">Back to preview</button>
+        <select id="pb-speed" aria-label="Recording playback speed"><option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option></select></div>
+      <input type="range" id="pb-scrub" aria-label="Recording position" min="0" max="1000" value="0">
     </div>
+    <p class="note">Props adds game rules, including newspaper collisions. These are a visual game layer, not a biological result.</p>
+    <p class="note"><a href="../../about.html">Sources &amp; feeding-model limits</a> · <a href="https://github.com/K4ryan/Chanjs/blob/main/embodied/README.md" target="_blank" rel="noreferrer">Embodied model &amp; assumptions ↗</a><br>FlyWire data: noncommercial use. Base code © Nic Dunzelman, MIT; NeuroMechFly Apache-2.0; three.js MIT.</p>
   </aside>
 
   <div class="splitter" id="split-left" title="Drag to resize · double-click to reset"><button class="collapse" id="collapse-left" title="Hide/show controls">‹</button></div>
 
   <section class="view" id="arena">
-    <div id="badge" class="badge-live">LIVE PREVIEW</div>
+    <div id="badge" class="badge-live">INSTANT PREVIEW</div>
     <div class="hud card" id="hud-tl">
       <div style="display:flex;justify-content:space-between;color:var(--muted)"><span>time</span><span>to food</span></div>
       <div style="display:flex;justify-content:space-between"><span class="big" id="h-time">0.00 s</span><span class="big" id="h-dist">30.0 mm</span></div>
@@ -174,14 +187,14 @@ select,input[type=number]{font:13px Inter,sans-serif;color:var(--text);backgroun
     <div class="hud" id="hud-tr"><button id="props-btn" title="Show the food as fruit and the danger as a rolled newspaper">🍎 Props</button><button id="cam-follow" class="on">Follow fly</button><button id="cam-over">Overview</button></div>
     <div id="game" class="game hidden"><div class="scan"></div><div class="game-title" id="game-title">GAME OVER</div>
       <div class="game-sub" id="game-sub"></div><button id="game-again">▶ START AGAIN</button><div class="game-hint" id="game-hint"></div></div>
-    <div class="hud" id="hud-bl">Drag objects · right-drag to pan · scroll to zoom</div>
+    <div class="hud" id="hud-bl">Drag objects · pinch/scroll to zoom · two fingers to pan</div>
   </section>
 
   <div class="splitter" id="split-right" title="Drag to resize · double-click to reset"><button class="collapse" id="collapse-right" title="Hide/show brain">›</button></div>
 
   <section class="view" id="brainview">
     <div class="hud card" id="brain-legend"></div>
-    <div class="hud" id="brain-title"><b>Brain activity</b><br><span id="brain-mode">rates from the real brain at these settings</span></div>
+    <div class="hud" id="brain-title"><b>Brain activity</b><br><span id="brain-mode">sampled activity from measured rates</span></div>
     <div class="hud" id="brain-tools"><button id="focus-btn" class="on" title="Spotlight the neurons that make the decision">Decision focus</button></div>
     <div class="hud card" id="circuit"></div>
   </section>
@@ -196,7 +209,7 @@ select,input[type=number]{font:13px Inter,sans-serif;color:var(--text);backgroun
   try { Object.assign(st, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) {}
   const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
   function apply() {
-    if (innerWidth <= 1100) { app.style.gridTemplateColumns = ''; return; }
+    if (innerWidth <= 1100) { app.style.gridTemplateColumns = ''; aside.classList.remove('collapsed'); brain.classList.remove('collapsed'); return; }
     let l = st.hideL ? 0 : clamp(st.left, MIN_L, MAX_L);
     let r = st.hideR ? 0 : clamp(st.right, MIN_R, innerWidth * .62);
     const over = l + r + 16 + MIN_MAP - innerWidth;
@@ -226,6 +239,11 @@ select,input[type=number]{font:13px Inter,sans-serif;color:var(--text);backgroun
   addEventListener('resize', apply); apply();
 })();
 </script>
-<script type="module" src="app.js"></script>
+<script type="module">
+import('./app.js').catch(error => {
+  console.error(error);
+  window.ChanjLoader?.fail('The 3D sandbox could not start. Check your connection and WebGL support, then retry.', () => location.reload());
+});
+</script>
 </body>
 </html>

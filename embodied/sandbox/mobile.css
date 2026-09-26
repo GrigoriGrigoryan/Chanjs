@@ -1,0 +1,87 @@
+/* Keep the desktop workspace intact; mobile becomes an arena-first document. */
+.mobile-nav{display:none}
+.back-link{display:inline-flex;align-items:center;min-height:44px;margin-bottom:10px;color:var(--accent);font-size:12px;text-underline-offset:4px}
+.panel a{color:var(--accent);text-underline-offset:4px}
+.replay-choices{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.replay-choices button{flex:1;min-height:44px}
+
+@media(max-width:1100px){
+  html,body{height:auto;min-height:100%}
+  html{overflow:auto}
+  body{overflow:visible}
+  .mobile-nav{position:sticky;top:0;z-index:8;display:flex;justify-content:center;gap:6px;padding:8px 12px;background:rgba(5,7,13,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+  .mobile-nav a{display:flex;align-items:center;justify-content:center;min-width:80px;min-height:44px;padding:10px 18px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-weight:600;color:var(--text);text-decoration:none}
+  .mobile-nav a:hover,.mobile-nav a:focus-visible{background:#1a2336;border-color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .app{width:100%;min-width:0;height:auto;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto;overflow:clip}
+  .splitter{display:none}
+  .view,.panel{min-width:0;scroll-margin-top:72px}
+  #arena{grid-column:1;grid-row:1;height:clamp(620px,calc(100svh - 61px),860px);border-bottom:1px solid var(--line)}
+  #brainview{grid-column:1;grid-row:2;height:940px;border-bottom:1px solid var(--line)}
+  .panel{grid-column:1;grid-row:3;border-right:0;padding:24px max(20px,calc((100vw - 720px)/2)) calc(32px + env(safe-area-inset-bottom));overflow:visible}
+  /* A desktop collapse preference must not hide the stacked mobile sections. */
+  .panel.collapsed,#brainview.collapsed{visibility:visible;overflow:visible!important}
+  .panel.collapsed{padding:24px max(20px,calc((100vw - 720px)/2)) calc(32px + env(safe-area-inset-bottom))!important}
+  #brainview.collapsed{overflow:hidden!important}
+  .view>canvas{position:absolute;inset:0}
+  button,select,input[type=number]{min-height:44px}
+  button{min-width:44px}
+  select,input[type=number]{font-size:16px}
+  input[type=range]{display:block;min-height:44px;margin:2px 0;cursor:pointer}
+  .knob{margin-bottom:16px}
+  .knob .row{gap:12px;align-items:flex-start}
+  .knob .val{flex-shrink:0;padding-top:2px}
+  .knob label{line-height:1.5}
+  .knob .hint,.note{font-size:12px;line-height:1.6}
+  .btns{gap:10px}
+  .status,.note,.sub{overflow-wrap:anywhere}
+  .panel h2{margin-top:28px}
+  #hud-tr{top:12px;left:12px;right:12px;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+  #hud-tr button,#brain-tools button{min-height:44px;padding:10px 12px}
+  #hud-tl{top:68px;left:12px;right:auto;width:230px;min-width:0;max-width:calc(100% - 24px)}
+  #hud-bl{bottom:16px;left:14px;right:14px;max-width:100%;text-align:center;font-size:11px;line-height:1.5}
+  #badge{bottom:52px;max-width:calc(100% - 24px);font-size:11px;text-align:center;white-space:normal}
+  #brain-title{top:20px;left:14px;right:auto;max-width:calc(100% - 174px);text-align:left}
+  #brain-title b{font-size:15px}
+  #brain-title span{display:none}
+  #brain-tools{top:10px;right:12px}
+  #brain-legend{top:68px;left:12px;max-width:min(240px,calc(100% - 24px));padding:10px 12px}
+  #brain-legend .item{font-size:12px;padding:2px 0}
+  #brain-legend .item span:last-child{font-size:11px}
+  #circuit{bottom:14px;left:12px;right:12px;max-height:360px;overflow:auto;pointer-events:auto;overscroll-behavior:contain}
+  /* The 640-unit circuit diagram stays legible and can be panned horizontally. */
+  #circuit svg{min-width:560px}
+  #why{font-size:12px;line-height:1.5}
+  .why-top{gap:4px 12px}
+  .why-cols{gap:12px}
+  .why-h{font-size:11px}
+  .tb{font-size:11px;grid-template-columns:22px minmax(0,1fr) 30px}
+  .because{font-size:12px;line-height:1.55}
+  /* These 3D labels overlap on phones; the legend and decision card retain the rates. */
+  .blabel{display:none}
+  .game{padding:24px 16px}
+  .game-title{font-size:clamp(20px,5.2vw,42px);letter-spacing:1px;overflow-wrap:anywhere}
+  .game-sub{font-size:10px;line-height:2;max-width:100%;overflow-wrap:anywhere}
+  #game-again{font-size:11px;line-height:1.6;padding:14px 12px;max-width:100%}
+  .game-hint{font-size:8px;line-height:2;max-width:100%;overflow-wrap:anywhere}
+}
+
+@media(max-width:380px){
+  .mobile-nav{gap:6px;padding:8px}
+  .mobile-nav a{flex:1;min-width:0;padding:10px}
+  .panel{padding-right:16px;padding-left:16px}
+  .panel.collapsed{padding-right:16px!important;padding-left:16px!important}
+  #hud-tr{gap:5px}
+  #hud-tr button{flex:1;padding:10px 6px;font-size:11px}
+  #brain-title{max-width:130px}
+  #brain-title b{font-size:13px}
+  #brain-tools button{padding-right:9px;padding-left:9px;font-size:11px}
+  .why-cols{gap:10px}
+  .why-h{font-size:10px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important}
+  .game,.game-title,#game-again{animation:none!important}
+  button,.progress>div,.meter>div,.tug>i{transition:none}
+}

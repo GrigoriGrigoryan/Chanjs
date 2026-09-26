@@ -5,17 +5,23 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { poseFrameAt, recordingPath } from './replay.mjs';
 
 const $ = id => document.getElementById(id);
+const STATIC_HOSTING = window.CHANJ_STATIC_HOSTING === true;
+if (!STATIC_HOSTING && document.querySelector('.back-link')) document.querySelector('.back-link').href = '/feeding/';
+const loadNote = text => window.ChanjLoader?.update(text);
 const bin = (u, T) => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); }).then(b => new T(b));
 const json = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const DEFAULT_FOOD = [30, 0], DEFAULT_DANGER = [15, 0];
 
 // ---------------------------------------------------------------- assets
+loadNote('Loading the NeuroMechFly body and FlyWire neuron positions…');
 const [meta, verts, faces, walk, npos, ngrp] = await Promise.all([
   json('assets/fly.json'), bin('assets/fly_verts.bin', Float32Array), bin('assets/fly_faces.bin', Uint32Array),
   bin('assets/walk.bin', Float32Array), bin('assets/neurons.bin', Float32Array), bin('assets/neuron_groups.bin', Uint8Array)]);
+loadNote('Assembling body geometry and the brain view…');
 let val = null, bidx = null, brates = null, K, OD, endoOA = 12;   // brain decision table (precompute_valence.py)
 const R = meta.reflex, MOT = meta.motion, G = meta.walk.geoms, NN = ngrp.length;
 const groupSize = meta.legend.map(l => l.count);
@@ -49,7 +55,10 @@ function makeView(el, { bloom, bg, zUp }) {
     const w = el.clientWidth, h = el.clientHeight;
     if (!w || !h) return;                  // collapsed panel
     renderer.setSize(w, h, false); composer.setSize(w, h);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
+    camera.aspect = w / h;
+    // Keep the subject in frame in tall mobile panes; this changes only the view.
+    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(21)) / Math.min(1, camera.aspect)));
+    camera.updateProjectionMatrix();
   };
   new ResizeObserver(resize).observe(el); resize();
   return { renderer, scene, camera, controls, composer };
@@ -490,7 +499,7 @@ async function loadVal() {
     [val, bidx, brates, K, OD] = [v, bi, br, v.knob, v.odor_hz];
     endoOA = P(K.indexOf(0), K.indexOf(0), 0).oa_hz;
     return true;
-  } catch { return false; }
+  } catch (error) { console.error('Brain table could not load', error); return false; }
 }
 function setStartReady(ready) {
   $('play').disabled = !ready;
@@ -611,13 +620,14 @@ function liveHudExtras() { if (live?.pt) { live.kc = live.pt.groupRate[3]; live.
 
 // ---------------------------------------------------------------- real simulation + playback
 async function runReal() {
+  if (STATIC_HOSTING) return;
   const k = ui.knobs;
   const body = { ...k, seed: +$('seed').value, seconds: +$('seconds').value, food: world.food, danger_pos: world.danger };
   $('run-real').disabled = true; $('prog').style.width = '0%';
   let res;
   try { res = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json()); }
   catch { $('real-status').innerHTML = '<span class="err">Server not reachable. Start it with: .venv/Scripts/python sandbox_server.py</span>'; $('run-real').disabled = false; return; }
-  if (!res.id) { $('real-status').innerHTML = `<span class="err">${res.error}</span>`; $('run-real').disabled = false; return; }
+  if (!res.id) { $('real-status').textContent = res.error || 'The simulation could not start.'; $('run-real').disabled = false; return; }
   const t0 = performance.now();
   const poll = async () => {
     const s = await fetch(`/api/run/${res.id}`).then(r => r.json()).catch(() => ({ status: 'running', progress: 0 }));
@@ -631,29 +641,54 @@ async function runReal() {
     $('run-real').disabled = false;
     if (s.status !== 'done') { $('real-status').innerHTML = `<span class="err">Simulation failed.</span>`; console.error(s.error); return; }
     $('prog').style.width = '100%'; $('real-status').textContent = `Done in ${(el / 60).toFixed(1)} min. Loading recording…`;
-    await loadRecording(res.id);
+    await openRecording(res.id);
   };
   poll();
 }
 async function loadRecording(id) {
-  const [run, poses, sidx, scnt] = await Promise.all([json(`/runs/${id}/run.json`), bin(`/runs/${id}/poses.bin`, Float32Array),
-    bin(`/runs/${id}/spikes_idx.bin`, Uint32Array), bin(`/runs/${id}/spikes_cnt.bin`, Uint8Array)]);
+  const base = recordingPath(id, STATIC_HOSTING);
+  loadNote('Loading recorded body poses and spike-count data…');
+  const [run, poses, sidx, scnt] = await Promise.all([json(`${base}/run.json`), bin(`${base}/poses.bin`, Float32Array),
+    bin(`${base}/spikes_idx.bin`, Uint32Array), bin(`${base}/spikes_cnt.bin`, Uint8Array)]);
   rec = { ...run, poses, sidx, scnt, lastW: -1, groupRate: new Array(meta.legend.length).fill(0), typeRate: new Array(decTypes.length).fill(0) };
   world.food = [...run.params.food]; world.danger = [...run.params.danger_pos];
+  // Controls describe the loaded run. Editing a control returns to preview.
+  if (mode === 'playback') exitPlayback();
+  for (const [id, value] of Object.entries({reward: run.params.reward, punish: run.params.punish, oa: run.params.octopamine,
+    danger: run.params.danger, heading: run.params.heading * 180 / Math.PI, seed: run.params.seed, seconds: run.params.seconds})) {
+    $(id).value = value;
+    $(id).dispatchEvent(new Event('input'));
+  }
+  // Newspaper collisions are a game overlay, not outcomes of recorded physics.
+  setProps(false);
   const s = run.summary;
   $('real-status').textContent = `Recorded run: ${s.reached ? `reached food at ${s.time_to_food.toFixed(2)} s` : `did not reach food (closest ${s.min_food_dist.toFixed(1)} mm)`}.`;
   enterPlayback();
 }
+let loadingRecording = false;
+async function openRecording(id) {
+  if (loadingRecording) return;
+  loadingRecording = true;
+  for (const key of ['replay-baseline', 'replay-modulated']) if ($(key)) $(key).disabled = true;
+  $('real-status').textContent = 'Loading recorded body poses and spike counts…';
+  try { await loadRecording(id); }
+  catch (error) { $('real-status').textContent = 'Recording could not load. Check your connection and select it again.'; console.error(error); }
+  finally {
+    loadingRecording = false;
+    for (const key of ['replay-baseline', 'replay-modulated']) if ($(key)) $(key).disabled = false;
+  }
+}
 function enterPlayback() {
   mode = 'playback'; playing = false; recT = 0; recPlaying = true; rec.lastW = -1;
+  $('play').textContent = '▶ Start';
   $('badge').className = 'badge-real'; $('badge').textContent = 'REAL SIMULATION · RECORDED';
-  $('brain-mode').textContent = 'recorded spikes from this run';
+  $('brain-mode').textContent = 'recorded spike counts · 25 ms windows';
   $('playback').classList.add('show'); $('pb-play').textContent = '⏸ Pause';
   clearGame(); flyRoot.position.set(0, 0, 0); flyRoot.rotation.set(0, 0, 0); trailClear(); glow.fill(0); placeObjects();
 }
 function exitPlayback() {
-  mode = 'live'; recPlaying = false; $('badge').className = 'badge-live'; $('badge').textContent = 'LIVE PREVIEW';
-  $('brain-mode').textContent = 'rates from the real brain at these settings'; $('playback').classList.remove('show');
+  mode = 'live'; recPlaying = false; $('badge').className = 'badge-live'; $('badge').textContent = 'INSTANT PREVIEW';
+  $('brain-mode').textContent = 'sampled activity from measured rates'; $('playback').classList.remove('show');
   placeObjects(); liveReset();
 }
 function recRow(t) { const rows = rec.rows; let i = Math.min(Math.floor(t / 0.025), rows.length - 1); return rows[Math.max(i, 0)]; }
@@ -673,7 +708,7 @@ function recStep(dt) {
       endGame('dead', { t: hit.t, at: [hit.x, hit.y], dist: Math.hypot(hit.x - world.food[0], hit.y - world.food[1]) });
     } else if (!hit && rec.summary.reached && recT >= rec.summary.time_to_food - 0.03) endGame('won', { t: rec.summary.time_to_food });
   }
-  const f = Math.min(Math.floor(recT / 0.01), rec.frames - 1);
+  const f = poseFrameAt(rec, recT);
   setPoses(rec.poses, f);
   const w = Math.min(Math.floor(recT / 0.025), rec.windows.length - 1);
   if (w < rec.lastW) { glow.fill(0); trailClear(); rec.lastW = -1; }
@@ -725,7 +760,7 @@ A.renderer.domElement.addEventListener('pointerup', () => { if (dragging) { drag
 const fmt = v => (v > 0 ? '+' : '') + (+v).toFixed(2);
 for (const [id, out, f] of [['reward', 'v-reward', fmt], ['punish', 'v-punish', fmt], ['oa', 'v-oa', fmt], ['danger', 'v-danger', v => (+v).toFixed(2)],
   ['heading', 'v-heading', v => `${v}°`]]) {
-  const upd = () => { $(out).textContent = f($(id).value); placeObjects(); if (id === 'heading' && !playing) liveReset(); };
+  const upd = () => { if (mode === 'playback') exitPlayback(); $(out).textContent = f($(id).value); placeObjects(); if (id === 'heading' && !playing) liveReset(); };
   $(id).addEventListener('input', upd); upd();
 }
 $('play').onclick = () => {
@@ -738,13 +773,21 @@ $('reset').onclick = () => { if (mode === 'playback') exitPlayback(); else liveR
 $('reset-pos').onclick = () => { world.food = [...DEFAULT_FOOD]; world.danger = [...DEFAULT_DANGER]; if (mode === 'playback') exitPlayback(); placeObjects(); liveReset(); };
 $('rand-heading').onclick = () => { $('heading').value = Math.round((Math.random() * 360 - 180) / 5) * 5; $('heading').dispatchEvent(new Event('input')); };
 $('run-real').onclick = runReal;
+if (STATIC_HOSTING) {
+  $('run-real').disabled = true;
+  $('run-real').textContent = 'Full simulation needs the Python runtime';
+  $('run-real').title = 'This hosted presentation supports instant preview and recorded runs. Run sandbox_server.py locally for new brain + MuJoCo simulations.';
+  $('real-status').textContent = 'Hosted mode: instant approximation + recorded results. New full-brain and MuJoCo runs require the local Python runtime.';
+}
+if ($('replay-baseline')) $('replay-baseline').onclick = () => openRecording('2ea7f28129');
+if ($('replay-modulated')) $('replay-modulated').onclick = () => openRecording('19be51902d');
 $('game-again').onclick = () => {
   if (mode === 'playback') { clearGame(); flyRoot.position.set(0, 0, 0); recT = 0; recPlaying = true; $('pb-play').textContent = '⏸ Pause'; return; }
   $('seed').value = +$('seed').value + 1; liveReset(); playing = true; $('play').textContent = '⏸ Pause';
 };
-$('props-btn').onclick = () => setProps(!propsOn);
+$('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); setProps(!propsOn); };
 $('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); hud(); };
-$('seed').addEventListener('input', () => { if (mode === 'live' && !playing) liveReset(); });
+$('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
 $('pb-play').onclick = () => { if (game.over) { clearGame(); recT = 0; } if (recT >= rec.rows.length * 0.025 - 0.01) { recT = 0; } recPlaying = !recPlaying; $('pb-play').textContent = recPlaying ? '⏸ Pause' : '▶ Play recording'; };
 $('pb-live').onclick = exitPlayback;
 $('pb-scrub').addEventListener('input', e => { if (game.over) { clearGame(); flyRoot.position.set(0, 0, 0); } recPlaying = false; $('pb-play').textContent = '▶ Play recording'; recT = +e.target.value / 1000 * rec.rows.length * 0.025; });
@@ -775,12 +818,15 @@ window.sandboxDebug = {
 // ---------------------------------------------------------------- loop
 placeObjects(); liveReset();
 try { if (localStorage.getItem('fly-sandbox-props') === '1') setProps(true); } catch (e) {}
+loadNote('Loading measured brain decisions and firing rates…');
 if (!await loadVal()) {
   setStartReady(false);
+  if (STATIC_HOSTING) throw new Error('The measured brain table could not load. Check your connection and retry.');
   const poll = setInterval(async () => { if (await loadVal()) { clearInterval(poll); setStartReady(true); } }, 20000);
 }
 const runParam = new URLSearchParams(location.search).get('run');   // reopen a past real run: ?run=<id>
-if (runParam && /^[0-9a-f]{10}$/.test(runParam)) loadRecording(runParam);
+if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await loadRecording(runParam);
+window.ChanjLoader?.finish();
 const clock = new THREE.Clock(); let hudT = 0;
 const flyPos = new THREE.Vector3();
 function frame() {

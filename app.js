@@ -121,6 +121,7 @@ async function startExperiment() {
   if(typeof ModulationData==='undefined')throw new Error('The modulation-group file is missing. Extract the complete project first.');
   if(typeof DecompressionStream==='undefined')throw new Error('This browser needs DecompressionStream support. Open this file in an up-to-date Chrome, Safari or Firefox.');
   $('loading').textContent='Unpacking 127,400 neurons…';
+  window.ChanjLoader?.update('Unpacking 127,400 neurons · preparing network memory');
   await new Promise(r=>setTimeout(r,0));
   const meta=FlyData.meta;
   // Decode in chunks to avoid another full-length intermediate byte string.
@@ -133,10 +134,12 @@ async function startExperiment() {
   FlyData.base64='';
   const buffer=await new Response(new Blob(chunks).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   if(buffer.byteLength!==meta.uncompressedBytes)throw new Error('The network is incomplete. Download the ZIP again.');
+  window.ChanjLoader?.update('Checking the downloaded network against its SHA-256 fingerprint');
   if(crypto.subtle){
     const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)),x=>x.toString(16).padStart(2,'0')).join('');
     if(hash!==meta.sha256)throw new Error('Network integrity check failed. Download the ZIP again.');
   }
+  window.ChanjLoader?.update('Starting the neural worker · building the feeding circuit');
   const source=`(${experimentWorker.toString()})(${FlyBrain.toString()},${FlyBody.toString()});`;
   const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
   worker=new Worker(url);URL.revokeObjectURL(url);
@@ -153,7 +156,8 @@ function receive(e) {
   const m=e.data;
   if(m.type==='records'){downloadRecords(m.records);return;}
   if(m.type==='ready'){
-    ready=true;$('loading').hidden=true;for(const el of document.querySelectorAll('button,input,select'))el.disabled=false;
+    ready=true;$('loading').hidden=true;for(const el of document.querySelectorAll('main button,main input,main select'))el.disabled=false;
+    window.ChanjLoader?.finish();
     document.body.dataset.ready='true';return;
   }
   if(m.type!=='state')return;
@@ -215,7 +219,9 @@ function downloadRecords(records) {
 }
 function showFailure(error) {
   $('loading').hidden=false;$('loading').textContent=error.message;$('loading').classList.add('error');
-  for(const el of document.querySelectorAll('button,input'))el.disabled=true;
+  ready=false; worker?.terminate();
+  for(const el of document.querySelectorAll('main button,main input,main select'))el.disabled=true;
+  window.ChanjLoader?.fail(error.message, () => location.reload());
   console.error(error);
 }
 function sendDrop(x,y) {

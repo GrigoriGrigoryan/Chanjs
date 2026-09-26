@@ -1,0 +1,13 @@
+{
+  "name": "chanjs-presentation",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node tools/build-vercel.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:hosting": "node --test tests/static-hosting.test.cjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}

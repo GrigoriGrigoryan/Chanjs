@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="A contact-taste experiment with the original Shiu fly-brain model: 127,400 neurons, real synaptic connectivity, and a simplified moving proboscis.">
-  <title>Fly brain · feeding</title>
+  <title>CHANJ · Fly brain feeding</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="loading.css">
 </head>
 <body>
+  <script src="loading.js"></script>
+  <script>window.ChanjLoader?.show({title:'A brain. A body. A beginning.',detail:'Downloading the FlyWire v630 feeding network · 127,400 neurons'});</script>
   <main>
+    <nav class="experience-nav" aria-label="Experiments"><a href="index.html" aria-current="page">Feeding experiment</a><a href="embodied/sandbox/">3D brain sandbox ↗</a></nav>
     <header><h1>Fly brain <span>/ feeding</span></h1><button id="pause" disabled>Pause</button></header>
     <div id="stage">
       <canvas id="fly" tabindex="0" role="img" aria-label="A tethered fruit fly and a movable sugar droplet. Drag the droplet to the mouth, or focus this view and use arrow keys to move it. Press Enter to touch the mouth."></canvas>
@@ -58,8 +62,8 @@
   <script src="body.js"></script>
   <script src="draw.js"></script>
   <script src="app.js"></script>
-  <script src="data/connectome.js" onerror="document.getElementById('loading').textContent='The network file could not load. Extract the complete ZIP, then open index.html.'"></script>
-  <script src="data/modulators.js" onerror="document.getElementById('loading').textContent='The modulation-group file could not load. Extract the complete project again.'"></script>
-  <script>startExperiment().catch(showFailure);</script>
+  <script defer src="data/connectome.js" onerror="showFailure(new Error('The feeding network could not download. Check your connection and retry.'))"></script>
+  <script defer src="data/modulators.js" onerror="showFailure(new Error('The modulation groups could not download. Check your connection and retry.'))"></script>
+  <script>window.addEventListener("DOMContentLoaded", () => startExperiment().catch(showFailure));</script>
 </body>
 </html>
