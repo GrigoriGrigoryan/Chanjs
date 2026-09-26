@@ -117,7 +117,18 @@ dialog::backdrop{background:#17121365;backdrop-filter:blur(4px)}
 .sheet-tabs{display:flex;gap:4px;margin:0 22px 16px;background:var(--shell);border-radius:15px;padding:4px;flex-shrink:0}
 .sheet-tabs button{flex:1;min-width:0;min-height:44px;background:transparent;border:0;color:var(--muted);font-size:12px;border-radius:11px;padding:10px}
 .sheet-tabs button[aria-pressed=true]{color:var(--text);background:var(--paper);box-shadow:0 2px 8px #30201909}
-.sheet-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 22px 24px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.sheet-scroll-frame{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.sheet-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 22px 24px;scrollbar-width:none}
+.sheet-scroll::-webkit-scrollbar{display:none}
+.sheet-scroll:focus-visible{outline:1px solid var(--accent-label);outline-offset:-2px}
+/* A permanent position rail sits in the empty edge gutter, clear of all controls. */
+.scroll-position{position:absolute;top:4px;right:6px;bottom:30px;width:4px;border-radius:4px;background:#e49bb324;opacity:0;pointer-events:none;transition:opacity .15s}
+.scroll-position>span{display:block;width:100%;min-height:24px;border-radius:4px;background:var(--accent-label);box-shadow:0 0 0 1px #170b1326}
+.sheet-scroll-frame[data-scrollable=true]>.scroll-position{opacity:1}
+.scroll-cue{display:flex;align-items:center;justify-content:center;gap:7px;flex:0 0 26px;min-height:26px;background:var(--paper);color:var(--accent-ink);font-size:9px;font-weight:600;letter-spacing:.3px;opacity:0;pointer-events:none;transition:opacity .15s}
+.scroll-cue svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.sheet-scroll-frame[data-more-below=true]>.scroll-cue{opacity:1}
+.brain-sheet .sheet-scroll-frame,.brain-sheet .scroll-cue{background:var(--scene)}
 .section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .section-title h3{font-size:19px;letter-spacing:-.5px;font-weight:550;margin:5px 0}
 .section-title>.icon-button{border:0;color:var(--muted);background:transparent}
@@ -254,7 +265,7 @@ input[type=range]::-moz-range-thumb{box-sizing:border-box;width:30px;height:30px
   #controls[open]{display:flex;animation:none}
   #controls>.sheet-header{padding:19px 18px 12px;gap:0}#controls>.sheet-header h2{font-size:22px;letter-spacing:-.8px}#controls>.sheet-header .eyebrow{font-size:8px;letter-spacing:1.4px}
   #controls>.sheet-header [data-close-dialog],#controls>.sheet-tabs,#controls>.sheet-grip{display:none}
-  #controls>.sheet-scroll{padding:0 18px 20px;flex:1}
+  #controls .sheet-scroll{padding:0 18px 20px;flex:1}
   #controls [data-control-panel],#controls [data-control-panel][hidden]{display:block!important}
   #controls [data-control-panel]+[data-control-panel]{border-top:1px solid var(--line);padding-top:20px;margin-top:22px}
   #controls .section-title h3{font-size:15px;letter-spacing:-.2px}#controls .section-title>.icon-button{width:44px;min-width:44px}

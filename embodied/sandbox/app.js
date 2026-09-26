@@ -40,7 +40,7 @@ const imageAsset = async u => {
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const DEFAULT_FOOD = [30, 0], DEFAULT_DANGER = [15, 0];
 
-// Let the timed opening finish before CPU/GPU preparation. Readiness still gates reveal.
+// Start CPU/GPU preparation after the intro paper settles. Readiness still gates reveal.
 await window.ChanjLoader?.beforeHeavyWork?.();
 let lastPreparationYield = performance.now();
 async function yieldToPresentation() {
@@ -90,9 +90,11 @@ function makeView(el, { bloom, bg, zUp, brain = false }) {
     composer.addPass(new OutputPass());
   }
   const view = {renderer, scene, camera, controls, composer, onResize: null};
+  let lastWidth = 0, lastHeight = 0;
   const resize = () => {
     const w = el.clientWidth, h = el.clientHeight;
-    if (!w || !h) return;                  // collapsed panel
+    if (!w || !h || (w === lastWidth && h === lastHeight)) return;
+    lastWidth = w; lastHeight = h;
     renderer.setSize(w, h, false); composer.setSize(w, h);
     camera.aspect = w / h;
     // Keep the subject in frame in tall mobile panes; this changes only the view.
@@ -201,53 +203,97 @@ function makeApple() {
   g.scale.setScalar(1.35); g.position.z = 1.35;
   return g;
 }
-function newspaperTexture() {
-  // A wide front sheet keeps the complete win headline on one readable face.
-  // 2400px exceeds its screen footprint without a wasteful 4K mobile upload.
-  const c = document.createElement('canvas'); c.width = 2400; c.height = 800;
+function newspaperTexture(headline = false) {
+  const c = document.createElement('canvas'); c.width = 2048; c.height = headline ? 720 : 1024;
   const x = c.getContext('2d');
-  x.fillStyle = '#f2ead8'; x.fillRect(0, 0, c.width, c.height);
-  x.fillStyle = '#f65b28'; x.fillRect(0, 0, c.width, 22);
-  x.drawImage(firebirdWordmark, 95, 55, 340, 340 * 20 / 97);
-  x.drawImage(firebirdGlyph, 2200, 46, 85, 85 * 284 / 218);
-  x.fillStyle = '#281b14'; x.textAlign = 'center'; x.font = 'bold 30px Georgia, serif';
-  x.fillText('WINNER’S EDITION', 1200, 103);
-  x.fillRect(95, 166, 2210, 6);
-  x.font = '900 230px Georgia, serif'; x.fillText('CHANJS WON', 1200, 414, 2200);
-  x.font = 'bold 128px Georgia, serif'; x.fillText('FIREBIRD HACKATHON', 1200, 568, 2200);
-  x.fillStyle = '#f65b28'; x.fillRect(95, 615, 2210, 64);
-  x.fillStyle = '#fff6e7'; x.font = 'bold 32px Georgia, serif'; x.fillText('A SMALL BRAIN. A BIG WORLD.', 1200, 659);
-  for (let column = 0; column < 6; column++) for (let row = 0; row < 3; row++) {
-    x.fillStyle = '#7d6a58'; x.fillRect(100 + column * 374, 710 + row * 22, row === 2 ? 255 : 330, 5);
+  x.fillStyle = '#e7e1d1'; x.fillRect(0, 0, c.width, c.height);
+  // Subtle paper fibers and ink variation, deterministic and unrelated to the model RNG.
+  for (let i = 0; i < 5200; i++) {
+    const px = (i * 647) % c.width, py = (i * 383) % c.height;
+    x.fillStyle = i % 3 ? '#b6ac9620' : '#ffffff35'; x.fillRect(px, py, 1 + i % 3, 1);
+  }
+  const column = (left, top, width, rows, salt = 0) => {
+    for (let row = 0; row < rows; row++) {
+      x.fillStyle = row % 5 ? '#554e43a0' : '#554e4370';
+      const end = row % 8 === 7 ? width * .63 : width - (row * 23 + salt * 17) % 30;
+      x.fillRect(left, top + row * 13, end, 4);
+    }
+  };
+  if (headline) {
+    // Printed on a flush curved section of the roll, never on a detached sign.
+    x.fillStyle = '#221e1a'; x.textAlign = 'center'; x.font = '900 206px Georgia, serif';
+    x.fillText('CHANJS WON', 1024, 218, 1900);
+    x.font = 'bold 104px Georgia, serif'; x.fillText('FIREBIRD HACKATHON', 1024, 346, 1900);
+    x.fillStyle = '#f65b28'; x.fillRect(72, 377, 1904, 12);
+    x.drawImage(firebirdGlyph, 80, 413, 48, 48 * 284 / 218);
+    x.drawImage(firebirdWordmark, 154, 430, 280, 280 * 20 / 97);
+    x.textAlign = 'right'; x.font = 'bold 29px Georgia, serif'; x.fillStyle = '#3a3128';
+    x.fillText('SPECIAL EDITION  /  BRAIN, BODY & WORLD', 1965, 465);
+    x.fillRect(72, 495, 1904, 3);
+    for (let col = 0; col < 6; col++) column(74 + col * 324, 524, 292, 13, col);
+  } else {
+    x.fillStyle = '#26221d'; x.textAlign = 'center'; x.font = 'bold 98px Georgia, serif';
+    x.fillText('THE CHANJS CHRONICLE', 1024, 115);
+    x.fillRect(55, 147, 1938, 6);
+    x.font = 'bold 45px Georgia, serif'; x.fillText('A small brain. A world of possibilities.', 1024, 211);
+    for (let col = 0; col < 8; col++) {
+      x.fillStyle = '#332e27'; x.fillRect(58 + col * 245, 250, 215, 9);
+      column(58 + col * 245, 275, 216, 52, col);
+      x.fillStyle = '#8e816650'; x.fillRect(46 + col * 245, 250, 1, 698);
+    }
+    x.fillStyle = '#74664e20'; x.fillRect(0, 956, 2048, 6);
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  t.anisotropy = A.renderer.capabilities.getMaxAnisotropy();
+  t.anisotropy = Math.min(8, A.renderer.capabilities.getMaxAnisotropy());
   return t;
 }
-function paperGeometry(radius, length) {
-  const geometry = new THREE.CylinderGeometry(radius, radius, length, 96, 1, true);
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, v, 1 - u); }
+function paperGeometry(top, bottom, length, start = 0, arc = Math.PI * 2) {
+  const geometry = new THREE.CylinderGeometry(top, bottom, length, 64, 12, true, start, arc);
+  const p = geometry.attributes.position, uv = geometry.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    const u = uv.getX(i), v = uv.getY(i);
+    // A slightly flattened, imperfect roll has a paper silhouette instead of a pipe.
+    const angle = Math.atan2(p.getX(i), p.getZ(i));
+    const fold = 1 + .012 * Math.sin(v * 18 + angle * 3);
+    p.setX(i, p.getX(i) * 1.12 * fold); p.setZ(i, p.getZ(i) * .9 * fold);
+    p.setY(i, p.getY(i) + .028 * Math.sin(angle * 5) * Math.pow(Math.abs(v - .5) * 2, 8));
+    uv.setXY(i, v, 1 - u);
+  }
+  geometry.computeVertexNormals();
   return geometry;
 }
 function makePaper() {
-  const pivot = new THREE.Group();             // hinge at the handle end; the far end slams onto the danger spot
-  const tex = newspaperTexture(), L = 13;
+  const pivot = new THREE.Group(), L = 13;
+  const stock = newspaperTexture(), front = newspaperTexture(true);
   const roll = new THREE.Group(); roll.position.x = L / 2; roll.rotation.z = Math.PI / 2; pivot.add(roll);
-  [[1.05, 0], [.78, .25]].forEach(([r, inset], k) => {
-    const m = new THREE.Mesh(paperGeometry(r, L - inset), new THREE.MeshStandardMaterial({
-      map: tex, color: k ? 0xd8d1bf : 0xffffff, roughness: .85, side: THREE.DoubleSide }));
-    m.rotation.y = -2.7; // face the printed headline toward the initial overview camera
-    m.castShadow = k === 0; roll.add(m);
-  });
-  // A folded front sits on the original roll. Its hinge, extent along the
-  // handle, animation and existing danger hit sphere remain unchanged.
-  const front = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 4.2), new THREE.MeshStandardMaterial({
-    map: tex, roughness: .92, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1}));
-  front.position.set(L / 2, -.3, 1.75); front.rotation.x = .88; front.castShadow = true; pivot.add(front);
-  const band = new THREE.Mesh(new THREE.TorusGeometry(1.07, .06, 8, 48), new THREE.MeshStandardMaterial({ color: 0xf65b28, roughness: .5 }));
-  band.rotation.x = Math.PI / 2; band.position.y = -L * .22; roll.add(band);
+  const material = new THREE.MeshStandardMaterial({map: stock, color: 0xffffff, roughness: .96, side: THREE.DoubleSide});
+  // Staggered inner sheets expose the rolled construction at both open ends.
+  for (let layer = 0; layer < 4; layer++) {
+    const inset = layer * .13;
+    const sheet = new THREE.Mesh(paperGeometry(.88 - layer * .17, 1.36 - layer * .23, L - inset), material);
+    sheet.position.y = inset * .25; sheet.castShadow = layer === 0; sheet.receiveShadow = true; roll.add(sheet);
+  }
+  // Same curvature and surface as the outer sheet. The headline faces the initial camera.
+  const print = new THREE.Mesh(paperGeometry(.893, 1.373, L, -2.04, 2.18),
+    new THREE.MeshStandardMaterial({map: front, roughness: .96, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1}));
+  roll.add(print);
+  // Fine irregular page edges and a visible spiral at each end read as rolled newsprint.
+  for (const end of [-1, 1]) {
+    const radius = end < 0 ? 1.36 : .88;
+    const points = [];
+    for (let i = 0; i <= 420; i++) {
+      const f = i / 420, a = f * Math.PI * 7.4 - .4, r = .16 + f * (radius - .16);
+      points.push(new THREE.Vector3(Math.sin(a) * r * 1.12, end * (L / 2 + .012), Math.cos(a) * r * .9));
+    }
+    const spiral = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({color: 0x8b8070}));
+    roll.add(spiral);
+  }
+  // A loose curled page edge remains attached along the back of the roll.
+  const edge = new THREE.Mesh(paperGeometry(.96, 1.48, L - .1, .9, .38), material);
+  edge.castShadow = true; roll.add(edge);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1.025, .032, 6, 48), new THREE.MeshStandardMaterial({color: 0xc79865, roughness: .9}));
+  band.rotation.x = Math.PI / 2; band.position.y = L * .28; band.scale.set(1.12, .9, 1); roll.add(band);
   pivot.position.set(-9, 0, 1.05);
   return pivot;
 }
@@ -335,7 +381,7 @@ function flyMaterial(n) {
 }
 const flyRoot = new THREE.Group(); A.scene.add(flyRoot);
 const flyMeshes = [];
-for (const [meshIndex, m] of meta.meshes.entries()) {
+for (const m of meta.meshes) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(verts.subarray(m.v[0] * 3, (m.v[0] + m.v[1]) * 3), 3));
   g.setIndex(new THREE.BufferAttribute(faces.subarray(m.f[0] * 3, (m.f[0] + m.f[1]) * 3), 1));
@@ -343,7 +389,7 @@ for (const [meshIndex, m] of meta.meshes.entries()) {
   const mesh = new THREE.Mesh(g, flyMaterial(m.name));
   mesh.castShadow = !/Wing/i.test(m.name); mesh.matrixAutoUpdate = false;
   flyRoot.add(mesh); flyMeshes.push(mesh);
-  if (meshIndex % 8 === 7) await yieldToPresentation();
+  await yieldToPresentation();
 }
 function setPoses(arr, frame) {
   const o = frame * G * 12;

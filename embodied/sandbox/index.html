@@ -77,7 +77,8 @@
   <div class="sheet-grip" aria-hidden="true"></div>
   <header class="sheet-header"><div><span class="eyebrow">YOUR EXPERIMENT</span><h2 id="controls-title">Your experiment.</h2></div><button class="icon-button" data-close-dialog aria-label="Close controls"><svg><use href="#i-close"/></svg></button></header>
   <nav class="sheet-tabs" aria-label="Control sections"><button data-control-tab="behavior" aria-pressed="true">Behavior</button><button data-control-tab="arena" aria-pressed="false">Arena</button><button data-control-tab="replays" aria-pressed="false">Replays</button></nav>
-  <div class="sheet-scroll">
+  <div class="sheet-scroll-frame">
+  <div class="sheet-scroll" tabindex="0" aria-label="Experiment settings"><div class="sheet-scroll-content">
     <section data-control-panel="behavior">
       <div class="section-title"><h3>Change the signal.</h3><button class="icon-button" data-help="modulators" aria-label="How neuromodulator controls work"><svg><use href="#i-info"/></svg></button></div>
       <p class="intro-note">Compare the fly’s response to each signal.</p>
@@ -106,6 +107,9 @@
       <details class="advanced"><summary>Run a new full simulation<svg><use href="#i-arrow"/></svg></summary><div class="advanced-inner"><div class="simulation-fields"><label>Seed<input type="number" id="seed" value="0" min="0" aria-label="Simulation seed"></label><label>Duration · seconds<input type="number" id="seconds" value="6" min="1" max="10" aria-label="Simulation duration in seconds"></label></div><button class="real" id="run-real">Run full simulation</button><div class="progress"><div id="prog"></div></div></div></details>
       <div class="status" id="real-status" role="status">New full-brain runs require the Python runtime.</div>
     </section>
+  </div></div>
+  <div class="scroll-position" aria-hidden="true"><span></span></div>
+  <div class="scroll-cue" aria-hidden="true"><span>More below</span><svg viewBox="0 0 16 16"><path d="M8 3v9m-4-4 4 4 4-4"/></svg></div>
   </div>
   <footer class="sheet-footer settings-footer"><button id="reset-settings"><svg><use href="#i-reset"/></svg>Reset all settings</button><span>Restore the natural starting conditions</span></footer>
 </dialog>
@@ -113,7 +117,11 @@
 <dialog class="sheet brain-sheet" id="brain-details" aria-labelledby="brain-details-title">
   <div class="sheet-grip" aria-hidden="true"></div><header class="sheet-header"><div><span class="eyebrow">BEHIND THE BEHAVIOR</span><h2 id="brain-details-title">Read the brain.</h2></div><button class="icon-button" data-close-dialog aria-label="Close brain details"><svg><use href="#i-close"/></svg></button></header>
   <nav class="sheet-tabs" aria-label="Brain details"><button data-brain-tab="groups" aria-pressed="true">Neuron groups</button><button data-brain-tab="pathway" aria-pressed="false">Decision pathway</button></nav>
-  <div class="sheet-scroll brain-data"><div data-brain-content="groups"><div class="select-field"><label for="brain-group">Highlight a neural group</label><select id="brain-group" aria-describedby="brain-group-note"><option value="all">All groups</option></select><p id="brain-group-note">Highlights a group in the brain. Other neurons stay visible.</p></div><p class="intro-note">Mean firing rate by neural group.</p><div id="brain-legend"></div></div><div data-brain-content="pathway" hidden><div id="circuit"></div></div></div>
+  <div class="sheet-scroll-frame">
+  <div class="sheet-scroll brain-data" tabindex="0" aria-label="Brain details"><div class="sheet-scroll-content"><div data-brain-content="groups"><div class="select-field"><label for="brain-group">Highlight a neural group</label><select id="brain-group" aria-describedby="brain-group-note"><option value="all">All groups</option></select><p id="brain-group-note">Highlights a group in the brain. Other neurons stay visible.</p></div><p class="intro-note">Mean firing rate by neural group.</p><div id="brain-legend"></div></div><div data-brain-content="pathway" hidden><div id="circuit"></div></div></div></div>
+  <div class="scroll-position" aria-hidden="true"><span></span></div>
+  <div class="scroll-cue" aria-hidden="true"><span>More below</span><svg viewBox="0 0 16 16"><path d="M8 3v9m-4-4 4 4 4-4"/></svg></div>
+  </div>
 </dialog>
 
 <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title"><div class="help-top"><span class="help-symbol"><svg><use href="#i-info"/></svg></span><button class="icon-button" data-close-dialog aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><span class="eyebrow" id="help-kicker">A QUICK GUIDE</span><h2 id="help-title">Welcome to Chanjs.</h2><div id="help-content"></div><button class="primary help-done" data-close-dialog>Got it<svg><use href="#i-arrow"/></svg></button></dialog>

@@ -10,6 +10,7 @@ const COACH_KEY = 'chanj-intro-seen-v2';
 let activeView = 'both';
 const dialogOpeners = new WeakMap();
 let coachTimer = 0;
+let scrollCueFrame = 0;
 
 const explanations = {
   about: {
@@ -77,12 +78,14 @@ function showControlTab(tab) {
   document.querySelectorAll('[data-control-tab]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.controlTab === tab)));
   document.querySelectorAll('[data-control-panel]').forEach(panel => { panel.hidden = !desktop.matches && panel.dataset.controlPanel !== tab; });
   controls.querySelector('.sheet-scroll').scrollTop = 0;
+  scheduleScrollCues();
 }
 function showBrainTab(tab) {
   if (!['groups', 'pathway'].includes(tab)) tab = 'groups';
   document.querySelectorAll('[data-brain-tab]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.brainTab === tab)));
   document.querySelectorAll('[data-brain-content]').forEach(panel => { panel.hidden = panel.dataset.brainContent !== tab; });
   brainDetails.querySelector('.sheet-scroll').scrollTop = 0;
+  scheduleScrollCues();
 }
 function openDialog(dialog, opener) {
   hideCoach();
@@ -90,6 +93,7 @@ function openDialog(dialog, opener) {
     dialogOpeners.set(dialog, opener || document.activeElement);
     dialog.showModal();
   }
+  scheduleScrollCues();
 }
 function closeDialog(dialog) {
   if (dialog === controls && desktop.matches) return;
@@ -113,6 +117,39 @@ function syncControlsLayout() {
   if (desktop.matches) controls.open = true; // a nonmodal panel; never steals loader focus
   showControlTab(controls.querySelector('[data-control-tab][aria-pressed="true"]')?.dataset.controlTab || 'behavior');
 }
+
+
+// Match the visible rail to the actual scroll area, including changes to tabs,
+// expanded details, loaded brain groups, fonts, and the desktop/mobile layout.
+function scheduleScrollCues() {
+  if (scrollCueFrame) return;
+  scrollCueFrame = requestAnimationFrame(() => {
+    scrollCueFrame = 0;
+    for (const frame of document.querySelectorAll('.sheet-scroll-frame')) {
+      const scroll = frame.querySelector('.sheet-scroll');
+      const rail = frame.querySelector('.scroll-position');
+      const thumb = rail.firstElementChild;
+      const maxScroll = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+      const scrollable = scroll.clientHeight > 0 && maxScroll > 2;
+      const position = Math.max(0, Math.min(maxScroll, scroll.scrollTop));
+      frame.dataset.scrollable = String(scrollable);
+      frame.dataset.moreBelow = String(scrollable && maxScroll - position > 2);
+      if (!scrollable) continue;
+      const height = Math.min(rail.clientHeight, Math.max(24, rail.clientHeight * scroll.clientHeight / scroll.scrollHeight));
+      thumb.style.height = `${height}px`;
+      thumb.style.transform = `translateY(${(rail.clientHeight - height) * position / maxScroll}px)`;
+    }
+  });
+}
+const scrollCueResize = new ResizeObserver(scheduleScrollCues);
+for (const frame of document.querySelectorAll('.sheet-scroll-frame')) {
+  const scroll = frame.querySelector('.sheet-scroll');
+  scroll.addEventListener('scroll', scheduleScrollCues, { passive: true });
+  scrollCueResize.observe(scroll);
+  scrollCueResize.observe(frame.querySelector('.sheet-scroll-content'));
+  new MutationObserver(scheduleScrollCues).observe(frame.closest('dialog'), { attributes: true, attributeFilter: ['open'] });
+}
+document.fonts?.ready.then(scheduleScrollCues);
 
 function openHelp(key, opener) {
   const explanation = explanations[key] || explanations.about;
@@ -251,3 +288,4 @@ applyBurgundy();
 setView('both');
 syncControlsLayout();
 syncPlayback();
+scheduleScrollCues();

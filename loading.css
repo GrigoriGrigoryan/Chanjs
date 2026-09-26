@@ -33,12 +33,13 @@ html.chanj-loading-lock { overflow: hidden; }
   padding: clamp(18px, 3.4vw, 48px);
   overflow: auto;
   isolation: isolate;
-  background: var(--cl-bg);
+  background: transparent;
   opacity: 1;
 
 }
 
-.cl-top, .cl-bottom { position: relative; z-index: 8; flex: none; }
+.chanj-loader::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--cl-bg); opacity: 1; pointer-events: none; will-change: opacity; }
+.cl-top, .cl-bottom { position: relative; z-index: 8; flex: none; opacity: 1; transition: opacity 160ms; }
 .cl-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; }
 .cl-brand { display: inline-flex; align-items: center; gap: 10px; font: 700 18px/1 "Chanj Space", Arial, sans-serif; letter-spacing: -.035em; }
 .cl-brand-mark { display: block; width: 32px; height: 32px; }
@@ -103,7 +104,8 @@ html.chanj-loading-lock { overflow: hidden; }
   opacity: 0;
   transform-origin: 13% 15%;
   transform: translate(42%, 40%) rotate(18deg);
-  will-change: transform;
+  --cl-read-pose: translate(-13%, -15%) rotate(0deg);
+  will-change: transform, opacity;
 }
 .cl-hand, .cl-paper-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .cl-hand { opacity: 0; filter: drop-shadow(0 18px 22px #0003); }
@@ -115,12 +117,15 @@ html.chanj-loading-lock { overflow: hidden; }
 .chanj-loader[data-cinema="impact"] .cl-paper-motion { opacity: 1; transform: translate(-13%, -15%) rotate(0deg); }
 .cl-splash { position: absolute; top: calc(50% + var(--cl-strike-y, -45px)); left: 50%; z-index: 4; width: clamp(170px, 22vw, 290px); transform: translate(-50%, -50%) scale(.05); opacity: 0; color: var(--cl-accent); pointer-events: none; }
 .cl-splash > svg { display: block; width: 100%; fill: currentColor; }
-.chanj-loader[data-cinema="impact"] .cl-splash { animation: cl-ink 380ms cubic-bezier(.2,.75,.18,1) both; }
+.chanj-loader[data-cinema="impact"] .cl-splash { animation: cl-ink 220ms cubic-bezier(.2,.75,.18,1) both; }
 @keyframes cl-ink { 0% { transform: translate(-50%, -50%) scale(.1); opacity: .8; } 24% { transform: translate(-50%, -50%) scale(1.12); opacity: .95; } 100% { transform: translate(-50%, -50%) scale(1); opacity: .18; } }
 .chanj-loader[data-cinema="impact"] .cl-fly > svg { opacity: 0; transform: scale(1.35, .15); }
 .chanj-loader[data-cinema="impact"] .cl-fly-wing, .chanj-loader[data-state="error"] .cl-fly-wing { animation: none; }
 .chanj-loader[data-cinema="aim"] .cl-orbit-line, .chanj-loader[data-cinema="strike"] .cl-orbit-line, .chanj-loader[data-cinema="impact"] .cl-orbit-line { opacity: 0; }
-.chanj-loader[data-cinema="impact"] .cl-readout { opacity: 0; filter: blur(3px); transform: translate(-50%, -53%) scale(.96); }
+.chanj-loader[data-counter="done"] .cl-readout { opacity: 0; visibility: hidden; transform: translate(-50%, -53%) scale(.96); transition: opacity 180ms, transform 240ms, visibility 0s 180ms; }
+.chanj-loader[data-cinema="waiting"] .cl-paper-motion { opacity: 1; transform: var(--cl-read-pose); }
+.chanj-loader[data-cinema="welcome"] .cl-paper-motion { animation: cl-paper-exit 360ms cubic-bezier(.22,.55,.3,1) both; }
+@keyframes cl-paper-exit { from { opacity: 1; transform: var(--cl-read-pose); } to { opacity: 0; transform: translate(20%, 34%) rotate(20deg); } }
 /* The reveal is typography alone; all loader chrome disappears for this final beat. */
 .cl-welcome {
   position: fixed;
@@ -137,30 +142,28 @@ html.chanj-loading-lock { overflow: hidden; }
 }
 .cl-welcome p { width: 100%; margin: 0; font: 700 clamp(60px, 8.5vw, 152px)/.98 "Chanj Space", Arial, sans-serif; letter-spacing: -.065em; }
 .cl-welcome-lead, .cl-welcome strong { display: block; font-weight: 700; }
-.chanj-loader[data-cinema="welcome"] { overflow: hidden; animation: cl-world-reveal 800ms cubic-bezier(.2,.55,.2,1) both; }
-.chanj-loader[data-cinema="welcome"] .cl-welcome { animation: cl-welcome-forward 800ms cubic-bezier(.18,.55,.25,1) both; }
+.chanj-loader[data-cinema="welcome"] { overflow: hidden; }
+.chanj-loader[data-cinema="welcome"]::before { animation: cl-world-reveal 1040ms cubic-bezier(.22,.55,.2,1) both; }
+.chanj-loader[data-cinema="welcome"] .cl-welcome { animation: cl-welcome-forward 1040ms cubic-bezier(.18,.55,.25,1) both; }
 .chanj-loader[data-cinema="welcome"] .cl-top,
-.chanj-loader[data-cinema="welcome"] .cl-bottom,
-.chanj-loader[data-cinema="welcome"] .cl-stage > :not(.cl-welcome) { visibility: hidden; }
-@keyframes cl-world-reveal { 0%, 18% { background-color: #751b3b; } 100% { background-color: #751b3b00; } }
+.chanj-loader[data-cinema="welcome"] .cl-bottom { opacity: 0; visibility: hidden; transition: opacity 160ms, visibility 0s 160ms; }
+.chanj-loader[data-cinema="welcome"] .cl-stage > :not(.cl-welcome):not(.cl-strike-origin) { visibility: hidden; }
+@keyframes cl-world-reveal { 0%, 24% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes cl-welcome-forward {
-  0% { opacity: 0; transform: scale(.88); filter: blur(3px); }
-  18% { opacity: 1; transform: scale(.95); filter: blur(0); }
-  63% { opacity: 1; transform: scale(1.02); filter: blur(0); }
-  100% { opacity: 0; transform: scale(1.25); filter: blur(6px); }
+  0%, 8% { opacity: 0; transform: scale(.9); }
+  33% { opacity: 1; transform: scale(.97); }
+  70% { opacity: 1; transform: scale(1.025); }
+  100% { opacity: 0; transform: scale(1.2); }
 }
-.cl-preparing { display: none; margin: 22px auto 0; color: var(--cl-muted); font: 500 11px/1.6 Avenir, Arial, sans-serif; }
+.cl-preparing { display: none; position: absolute; top: 24px; left: 50%; z-index: 6; width: 100%; margin: 0; transform: translateX(-50%); text-align: center; color: var(--cl-muted); font: 500 11px/1.6 Avenir, Arial, sans-serif; }
 .cl-busy-dot { display: inline-block; width: 5px; height: 5px; margin: 0 7px 2px 0; border-radius: 50%; background: var(--cl-accent); animation: cl-busy 1300ms ease-in-out infinite alternate; }
 @keyframes cl-busy { to { opacity: .25; } }
 .chanj-loader[data-cinema="waiting"] .cl-preparing { display: block; }
+.chanj-loader[data-cinema="waiting"] .cl-stage-label { visibility: hidden; }
 .chanj-loader[data-cinema="waiting"] .cl-fly,
 .chanj-loader[data-cinema="welcome"] .cl-fly,
 .chanj-loader[data-cinema="waiting"] .cl-orbit-line,
-.chanj-loader[data-cinema="welcome"] .cl-orbit-line,
-.chanj-loader[data-cinema="waiting"] .cl-strike-origin,
-.chanj-loader[data-cinema="welcome"] .cl-strike-origin { display: none; }
-.chanj-loader[data-cinema="waiting"] .cl-readout { opacity: 1; filter: none; transform: translate(-50%, -50%); }
-.chanj-loader[data-cinema="welcome"] .cl-readout { opacity: 0; filter: blur(8px); transform: translate(-50%, -57%) scale(.94); }
+.chanj-loader[data-cinema="welcome"] .cl-orbit-line { display: none; }
 .chanj-loader[data-cinema="waiting"] .cl-splash,
 .chanj-loader[data-cinema="welcome"] .cl-splash { opacity: .06; transform: translate(-50%, -50%) scale(1); }
 .chanj-loader[data-cinema="welcome"] .cl-stage-label { opacity: 0; transition: opacity 240ms; }
@@ -175,6 +178,7 @@ html.chanj-loading-lock { overflow: hidden; }
 .cl-time > span { color: var(--cl-muted); font-size: 8px; line-height: 1; letter-spacing: .18em; }
 .cl-time output { font: 700 20px/1 "Chanj Space", Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
 .chanj-loader[data-mode="simple"] .cl-fly, .chanj-loader[data-mode="simple"] .cl-strike-origin, .chanj-loader[data-mode="simple"] .cl-splash, .chanj-loader[data-mode="simple"] .cl-orbit-line, .chanj-loader[data-mode="simple"] .cl-illustration { display: none; }
+.chanj-loader[data-mode="simple"][data-counter="done"] .cl-readout { opacity: 0; visibility: hidden; transition: none; }
 .chanj-loader[data-state="error"] .cl-percent-unit { visibility: hidden; }
 .chanj-loader[data-state="error"] .cl-fly { opacity: .3; }
 .chanj-loader[data-state="error"] .cl-readout { opacity: .4; }
@@ -186,7 +190,7 @@ html.chanj-loading-lock { overflow: hidden; }
 .chanj-loader[data-motion="reduced"] .cl-strike-origin { display: none; }
 .chanj-loader[data-motion="reduced"] .cl-orbit-line { opacity: .35; }
 .chanj-loader[data-motion="reduced"][data-cinema="impact"] .cl-splash { animation: none; opacity: .18; transform: translate(-50%, -50%); }
-.chanj-loader[data-motion="reduced"][data-cinema="welcome"] { animation: none; }
+.chanj-loader[data-motion="reduced"][data-cinema="welcome"]::before { animation: none; }
 .chanj-loader[data-motion="reduced"][data-cinema="welcome"] .cl-welcome { animation: none; opacity: 1; transform: none; filter: none; }
 .chanj-loader[data-motion="reduced"] .cl-busy-dot { animation: none; }
 .chanj-loader[data-motion="reduced"] .cl-readout, .chanj-loader[data-motion="reduced"] .cl-fly > svg { transition: none; }
@@ -212,10 +216,11 @@ html.chanj-loading-lock { overflow: hidden; }
   .cl-time output { font-size: 18px; }
   .cl-actions { grid-column: 1 / -1; }
   .cl-actions:has(.cl-retry[hidden]) { display: none; }
-  .chanj-loader[data-cinema="impact"] .cl-paper-motion { animation: cl-paper-reading 850ms cubic-bezier(.18,.65,.2,1) both; }
+  .cl-paper-motion { --cl-read-pose: translate(-28%, -19%) rotate(14deg); }
+  .chanj-loader[data-cinema="impact"] .cl-paper-motion { animation: cl-paper-reading 240ms cubic-bezier(.18,.65,.2,1) both; }
   @keyframes cl-paper-reading {
-    0%, 8% { transform: translate(-13%, -15%) rotate(0deg); }
-    26%, 100% { transform: translate(-28%, -19%) rotate(14deg); }
+    from { transform: translate(-13%, -15%) rotate(0deg); }
+    to { transform: var(--cl-read-pose); }
   }
   .cl-welcome { padding: 16px; }
   .cl-welcome p { font-size: clamp(43px, 12vw, 70px); line-height: 1; }
@@ -240,6 +245,6 @@ html.chanj-loading-lock { overflow: hidden; }
   .cl-detail { display: inline; font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chanj-loader, .chanj-loader *, .chanj-loader *::after { animation: none !important; transition: none !important; }
+  .chanj-loader, .chanj-loader::before, .chanj-loader *, .chanj-loader *::after { animation: none !important; transition: none !important; }
   .cl-strike-origin { display: none; }
 }
