@@ -19,7 +19,7 @@ if (initialRecording) {
   const base = recordingPath(initialRecording, STATIC_HOSTING);
   preparationSteps.push(...['run.json', 'poses.bin', 'spikes_idx.bin', 'spikes_cnt.bin'].map(file => `${base}/${file}`));
 }
-preparationSteps.push('scene', 'frame');
+preparationSteps.push('../../assets/brand/firebird-glyph.svg', '../../assets/brand/firebird-wordmark.svg', 'scene', 'frame');
 const prepared = preparationProgress(preparationSteps, fraction => window.ChanjLoader?.progress?.(fraction));
 if (!STATIC_HOSTING && document.querySelector('.back-link')) document.querySelector('.back-link').href = '/feeding/';
 const loadNote = text => window.ChanjLoader?.update(text);
@@ -31,18 +31,31 @@ const initialBytes = new Map(preparationSteps.filter(u => !['scene', 'frame'].in
 const takeBytes = u => { const request = initialBytes.get(u); initialBytes.delete(u); return request || fetchBytes(u); };
 const bin = (u, T) => takeBytes(u).then(b => { const data = new T(b); prepared(u); return data; });
 const json = u => takeBytes(u).then(b => { const data = JSON.parse(new TextDecoder().decode(b)); prepared(u); return data; });
+const imageAsset = async u => {
+  const url = URL.createObjectURL(new Blob([await takeBytes(u)], {type: 'image/svg+xml'}));
+  try {
+    const image = new Image(); image.src = url; await image.decode(); prepared(u); return image;
+  } finally { URL.revokeObjectURL(url); }
+};
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const DEFAULT_FOOD = [30, 0], DEFAULT_DANGER = [15, 0];
 
 // Let the timed opening finish before CPU/GPU preparation. Readiness still gates reveal.
 await window.ChanjLoader?.beforeHeavyWork?.();
-const yieldToPresentation = () => new Promise(resolve => setTimeout(resolve, 0));
+let lastPreparationYield = performance.now();
+async function yieldToPresentation() {
+  if (performance.now() - lastPreparationYield < 8) return;
+  if (globalThis.scheduler?.yield) await globalThis.scheduler.yield();
+  else await new Promise(resolve => setTimeout(resolve, 0));
+  lastPreparationYield = performance.now();
+}
 
 // ---------------------------------------------------------------- assets
 loadNote('Loading the NeuroMechFly body and FlyWire neuron positions…');
-const [meta, verts, faces, walk, npos, ngrp] = await Promise.all([
+const [meta, verts, faces, walk, npos, ngrp, firebirdGlyph, firebirdWordmark] = await Promise.all([
   json('assets/fly.json'), bin('assets/fly_verts.bin', Float32Array), bin('assets/fly_faces.bin', Uint32Array),
-  bin('assets/walk.bin', Float32Array), bin('assets/neurons.bin', Float32Array), bin('assets/neuron_groups.bin', Uint8Array)]);
+  bin('assets/walk.bin', Float32Array), bin('assets/neurons.bin', Float32Array), bin('assets/neuron_groups.bin', Uint8Array),
+  imageAsset('../../assets/brand/firebird-glyph.svg'), imageAsset('../../assets/brand/firebird-wordmark.svg')]);
 loadNote('Assembling body geometry and the brain view…');
 let val = null, bidx = null, brates = null, K, OD, endoOA = 12;   // brain decision table (precompute_valence.py)
 const R = meta.reflex, MOT = meta.motion, G = meta.walk.geoms, NN = ngrp.length;
@@ -102,7 +115,9 @@ A.controls.screenSpacePanning = false;
 
 const hemi = new THREE.HemisphereLight(0xa9cfff, 0x20160c, 0.7); hemi.position.set(0, 0, 1); A.scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
-sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+sun.castShadow = true;
+const shadowSize = matchMedia('(max-width:1099px)').matches ? 512 : 1024;
+sun.shadow.mapSize.set(shadowSize, shadowSize);
 Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 80 });
 sun.shadow.bias = -0.0004; sun.shadow.radius = 4;
 A.scene.add(sun, sun.target);
@@ -187,22 +202,23 @@ function makeApple() {
   return g;
 }
 function newspaperTexture() {
-  // The outer roll's UVs map x along its length, so headlines retain newspaper
-  // proportions instead of being stretched around the cylinder circumference.
-  const c = document.createElement('canvas'); c.width = 4096; c.height = 2048;
+  // A wide front sheet keeps the complete win headline on one readable face.
+  // 2400px exceeds its screen footprint without a wasteful 4K mobile upload.
+  const c = document.createElement('canvas'); c.width = 2400; c.height = 800;
   const x = c.getContext('2d');
-  x.fillStyle = '#eee7d6'; x.fillRect(0, 0, c.width, c.height);
-  x.fillStyle = '#17130f'; x.textAlign = 'center';
-  x.font = '900 300px Georgia, serif'; x.fillText('FIREBIRD', 2048, 570, 3820);
-  x.fillRect(150, 620, 3796, 14);
-  x.font = 'bold 180px Georgia, serif'; x.fillText('CHANJS WINS', 2048, 825, 3780);
-  x.fillText('FIREBIRD HACKATHON', 2048, 1025, 3780);
-  x.font = '44px Georgia, serif'; x.fillText('A SMALL BRAIN. A BIG WORLD.  •  SPECIAL EDITION', 2048, 1190);
-  x.fillRect(150, 1240, 3796, 8);
-  for (let col = 0; col < 6; col++) for (let row = 0; row < 18; row++) {
-    x.fillStyle = '#62594d';
-    const w = row % 5 === 4 ? 410 : 550 - (row * 17 + col * 23) % 45;
-    x.fillRect(155 + col * 632, 1310 + row * 35, w, 10);
+  x.fillStyle = '#f2ead8'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#f65b28'; x.fillRect(0, 0, c.width, 22);
+  x.drawImage(firebirdWordmark, 95, 55, 340, 340 * 20 / 97);
+  x.drawImage(firebirdGlyph, 2200, 46, 85, 85 * 284 / 218);
+  x.fillStyle = '#281b14'; x.textAlign = 'center'; x.font = 'bold 30px Georgia, serif';
+  x.fillText('WINNER’S EDITION', 1200, 103);
+  x.fillRect(95, 166, 2210, 6);
+  x.font = '900 230px Georgia, serif'; x.fillText('CHANJS WON', 1200, 414, 2200);
+  x.font = 'bold 128px Georgia, serif'; x.fillText('FIREBIRD HACKATHON', 1200, 568, 2200);
+  x.fillStyle = '#f65b28'; x.fillRect(95, 615, 2210, 64);
+  x.fillStyle = '#fff6e7'; x.font = 'bold 32px Georgia, serif'; x.fillText('A SMALL BRAIN. A BIG WORLD.', 1200, 659);
+  for (let column = 0; column < 6; column++) for (let row = 0; row < 3; row++) {
+    x.fillStyle = '#7d6a58'; x.fillRect(100 + column * 374, 710 + row * 22, row === 2 ? 255 : 330, 5);
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
@@ -219,40 +235,27 @@ function makePaper() {
   const pivot = new THREE.Group();             // hinge at the handle end; the far end slams onto the danger spot
   const tex = newspaperTexture(), L = 13;
   const roll = new THREE.Group(); roll.position.x = L / 2; roll.rotation.z = Math.PI / 2; pivot.add(roll);
-  [[1.05, 0], [.78, .25], [.52, .5]].forEach(([r, inset], k) => {
+  [[1.05, 0], [.78, .25]].forEach(([r, inset], k) => {
     const m = new THREE.Mesh(paperGeometry(r, L - inset), new THREE.MeshStandardMaterial({
       map: tex, color: k ? 0xd8d1bf : 0xffffff, roughness: .85, side: THREE.DoubleSide }));
     m.rotation.y = -2.7; // face the printed headline toward the initial overview camera
     m.castShadow = k === 0; roll.add(m);
   });
-  const band = new THREE.Mesh(new THREE.TorusGeometry(1.07, .06, 8, 48), new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: .5 }));
+  // A folded front sits on the original roll. Its hinge, extent along the
+  // handle, animation and existing danger hit sphere remain unchanged.
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 4.2), new THREE.MeshStandardMaterial({
+    map: tex, roughness: .92, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1}));
+  front.position.set(L / 2, -.3, 1.75); front.rotation.x = .88; front.castShadow = true; pivot.add(front);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1.07, .06, 8, 48), new THREE.MeshStandardMaterial({ color: 0xf65b28, roughness: .5 }));
   band.rotation.x = Math.PI / 2; band.position.y = -L * .22; roll.add(band);
   pivot.position.set(-9, 0, 1.05);
   return pivot;
 }
-function makeSugar() {
-  const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({color: 0xf8f2de, roughness: .95});
-  for (const [x, y, z, angle] of [[-.65, -.25, .75, .12], [.65, .25, .75, -.16], [.02, .04, 2.05, .22]]) {
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.35, 1.35), material);
-    cube.position.set(x, y, z); cube.rotation.z = angle; cube.castShadow = cube.receiveShadow = true; group.add(cube);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(cube.geometry), new THREE.LineBasicMaterial({color: 0xcac2aa, transparent: true, opacity: .5}));
-    cube.add(edges);
-  }
-  return group;
-}
-const apple = makeApple(), sugar = makeSugar(); apple.visible = sugar.visible = false; food.add(apple, sugar);
-let foodStyle = 'apple';
-function setFoodStyle(style) {
-  foodStyle = style === 'sugar' ? 'sugar' : 'apple';
-  apple.visible = propsOn && foodStyle === 'apple'; sugar.visible = propsOn && foodStyle === 'sugar';
-  if ($('food-style')) $('food-style').value = foodStyle;
-}
-if ($('food-style')) $('food-style').addEventListener('change', event => setFoodStyle(event.target.value));
+const apple = makeApple(); apple.visible = false; food.add(apple);
 const paperAim = new THREE.Group(), paperHinge = makePaper(); paperAim.add(paperHinge); paperAim.visible = false; danger.add(paperAim);
 let propsOn = false;
 function setProps(on) {
-  propsOn = on; paperAim.visible = on; setFoodStyle(foodStyle);
+  propsOn = on; paperAim.visible = apple.visible = on;
   if (!on && game.over) clearGame();
   foodBall.visible = dangerBall.visible = dangerCloud.visible = particles.visible = !on;
   $('props-btn').classList.toggle('on', on);
@@ -448,7 +451,7 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const brainPts = new THREE.Points(brainGeo, new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.NormalBlending,
   uniforms: {uPixelRatio: {value: B.renderer.getPixelRatio()}, uFitDistance: {value: 15}, uHalf: {value: ACT_HALF},
-    uFocus: {value: 0}, uGroup: {value: -1}, uTime: {value: 0}},
+    uFocus: {value: 1}, uGroup: {value: -1}, uTime: {value: 0}},
   vertexShader: `attribute vec3 aColor; attribute vec4 aStyle; attribute float aGlow, aDec, aChg, aGroup;
     uniform float uPixelRatio, uFitDistance, uHalf, uFocus, uGroup, uTime; varying vec3 vC; varying float vAlpha;
     void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_Position = projectionMatrix*mv;
@@ -472,9 +475,20 @@ const brainPts = new THREE.Points(brainGeo, new THREE.ShaderMaterial({
 }));
 B.scene.add(brainPts);
 const brainBounds = {min: brainGeo.boundingBox.min.toArray(), max: brainGeo.boundingBox.max.toArray()};
+const focusExtra = [];
+for (const x of [-.45, .45]) for (const y of [brainBounds.max[1] + .85, brainBounds.max[1] + 1.75])
+  for (const z of [-.45, .45]) focusExtra.push([x, y, z]);
+const focusBounds = {min: [...brainBounds.min], max: [...brainBounds.max]};
+for (const point of focusExtra) for (let axis = 0; axis < 3; axis++) {
+  focusBounds.min[axis] = Math.min(focusBounds.min[axis], point[axis]); focusBounds.max[axis] = Math.max(focusBounds.max[axis], point[axis]);
+}
+let focusOn = true;
+function compactBothBrain() { return matchMedia('(max-width:1099px)').matches && document.body.dataset.view === 'both'; }
 function fitBrain(width = $('brainview').clientWidth, height = $('brainview').clientHeight) {
   if (!width || !height) return;
-  const fit = fitBrainBounds(brainBounds, width, height, B.camera.fov);
+  const compactBoth = compactBothBrain();
+  const fit = fitBrainBounds(focusOn ? focusBounds : brainBounds, width, height, B.camera.fov,
+    {points: bp, extraPoints: focusOn ? focusExtra : [], ...(compactBoth ? {top: 52, bottom: 8} : {})});
   B.controls.target.set(fit.center[0], fit.targetY, fit.center[2]);
   B.camera.position.set(fit.center[0], fit.targetY, fit.center[2] + fit.distance);
   B.controls.minDistance = fit.distance * .45; B.controls.maxDistance = fit.distance * 1.8;
@@ -482,17 +496,9 @@ function fitBrain(width = $('brainview').clientWidth, height = $('brainview').cl
   B.controls.update();
 }
 B.onResize = fitBrain; fitBrain();
-// Themes change the stage lighting, never the scientific group colors.
-function applySceneTheme() {
-  const burgundy = document.documentElement.dataset.theme === 'burgundy';
-  const background = burgundy ? 0x1b1018 : 0x09090b;
-  A.scene.background.setHex(background); A.scene.fog.color.setHex(background);
-  floor.material.color.setHex(burgundy ? 0x231820 : 0x121215);
-  B.scene.background.setHex(burgundy ? 0x120c12 : 0x050506);
-  hemi.color.setHex(burgundy ? 0xe7cad8 : 0xe2d1d5);
-}
-applySceneTheme();
-window.addEventListener('chanj:themechange', applySceneTheme);
+// The presentation uses burgundy lighting; scientific group colors stay fixed.
+A.scene.background.setHex(0x1b1018); A.scene.fog.color.setHex(0x1b1018);
+floor.material.color.setHex(0x231820); B.scene.background.setHex(0x120c12); hemi.color.setHex(0xe7cad8);
 
 // ---------------------------------------------------------------- decision focus: why did the fly decide?
 const DEC = meta.decision, decTypes = [...DEC.approach, ...DEC.avoid];
@@ -536,8 +542,7 @@ function label(pos, color) {
 const off = (v, x, y) => v.clone().add(new THREE.Vector3(x, y, 0));
 const labels = { app: label(off(CT.app[0], -1.3, .35), '#c6ff3c'), avo: label(off(CT.avo[1], 1.3, .35), '#ff3cd2'),
   pam: label(off(CT.pam[0], -1.3, -.45), '#2ee88a'), ppl1: label(off(CT.ppl1[1], 1.3, -.45), '#ff4b5c'), orb: label(off(orbPos, 0, .55), '#fff') };
-let focusOn = false;
-focusGroup.visible = false;
+focusGroup.visible = true;
 function updateFocus(d) {
   focusGroup.visible = focusOn; brainPts.material.uniforms.uFocus.value = focusOn ? 1 : 0;
   $('circuit').querySelector('svg').style.display = focusOn ? 'none' : 'block';   // the why-panel replaces the strip
@@ -594,14 +599,15 @@ if ($('brain-labels')) {
 }
 function updateBrainLabels() {
   const width = $('brainview').clientWidth, height = $('brainview').clientHeight;
-  const compact = matchMedia('(max-width:1099px)').matches;
-  const top = compact ? (height < 330 ? 152 : 176) : 180, bottom = compact ? 74 : 124;
-  const available = Math.max(44, height - top - bottom), narrow = width < 290;
+  const compact = matchMedia('(max-width:1099px)').matches, compactBoth = compactBothBrain();
+  const top = compactBoth ? 56 : compact ? (height < 330 ? 152 : 176) : 180, bottom = compactBoth ? 8 : compact ? 74 : 124;
+  const available = Math.max(0, height - top - bottom), narrow = width < 290;
   // A 250px desktop pane cannot fit two full group names on the same row.
   // Stagger those rails vertically, with room for the actual button height.
-  const capacity = narrow ? Math.min(5, Math.max(1, Math.floor(available / (compact ? 50 : 36))))
+  const capacity = compactBoth ? (available < 44 ? 0 : available < 105 ? 1 : 2)
+    : narrow ? Math.min(5, Math.max(1, Math.floor(available / (compact ? 50 : 36))))
     : Math.min(5, Math.max(2, Math.floor(available / 46) * 2));
-  const visible = selectedBrainGroup >= 0 ? [selectedBrainGroup] : [4, 5, 6, 7, 3].slice(0, capacity);
+  const visible = capacity === 0 ? [] : selectedBrainGroup >= 0 ? [selectedBrainGroup] : (compactBoth ? [6, 7] : [4, 5, 6, 7, 3]).slice(0, capacity);
   const active = groupLabels.filter(entry => visible.includes(entry.index));
   for (const entry of groupLabels) {
     entry.object.visible = brainLabelsOn && visible.includes(entry.index);
@@ -612,8 +618,9 @@ function updateBrainLabels() {
   active.sort((a, b) => b.projected.y - a.projected.y);
   active.forEach((entry, rank) => {
     const anchorX = (entry.projected.x + 1) * width / 2, anchorY = (1 - entry.projected.y) * height / 2;
-    const railX = active.length === 1 ? width / 2 : (rank % 2 ? width - 80 : 80);
-    const railY = active.length === 1 ? Math.max(top + 22, height - bottom - 24)
+    const sideRail = compactBoth && active.length === 1 && width >= 480 && height < 200;
+    const railX = sideRail ? 80 : active.length === 1 ? width / 2 : (rank % 2 ? width - 80 : 80);
+    const railY = compactBoth ? height - bottom - 24 : active.length === 1 ? Math.max(top + 22, height - bottom - 24)
       : narrow ? top + available * (rank + .5) / active.length
       : top + available * (Math.floor(rank / 2) + .5) / Math.ceil(active.length / 2);
     const dx = railX - anchorX, dy = railY - anchorY;
@@ -995,7 +1002,7 @@ $('game-again').onclick = () => {
 $('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); markCustomSettings(); setProps(!propsOn); };
 $('focus-btn').classList.toggle('on', focusOn);
 $('focus-btn').setAttribute('aria-pressed', String(focusOn));
-$('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); hud(); };
+$('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); fitBrain(); hud(); };
 $('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
 $('pb-play').onclick = () => { if (game.over) { clearGame(); recT = 0; } if (recT >= rec.rows.length * 0.025 - 0.01) { recT = 0; } recPlaying = !recPlaying; $('pb-play').textContent = recPlaying ? '⏸ Pause' : '▶ Play recording'; };
 $('pb-live').onclick = exitPlayback;

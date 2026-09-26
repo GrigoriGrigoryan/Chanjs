@@ -53,6 +53,11 @@ test('root and nested sandbox entries resolve all assets without publishing feed
       .includes(`./view-math.mjs?v=${result.version}`), 'Camera math receives the same cache version');
     assert.ok(fs.readFileSync(path.join(output, 'loading.js'), 'utf8')
       .includes(`assets/loading/newspaper-hand.webp?v=${result.version}`), 'Replacement newspaper artwork invalidates cached art');
+    for (const name of ['firebird-glyph.svg', 'firebird-wordmark.svg']) {
+      assert.ok(fs.readFileSync(path.join(output, 'embodied/sandbox/app.js'), 'utf8')
+        .includes(`../../assets/brand/${name}?v=${result.version}`), `Newspaper logo uses a versioned deployed asset: ${name}`);
+      assert.ok(fs.existsSync(path.join(output, 'assets/brand', name)));
+    }
     assert.ok(fs.existsSync(path.join(output, 'assets/fonts/space-grotesk-bold.ttf')));
     assert.ok(fs.existsSync(path.join(output, 'assets/fonts/OFL.txt')), 'The font license ships with the font');
     assert.ok(fs.existsSync(path.join(output, 'assets/fonts/PressStart2P-Regular.ttf')));

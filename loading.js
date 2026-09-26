@@ -1,29 +1,22 @@
-/* A three-second illustrated opening; application readiness remains a separate gate. */
+/* A two-second illustrated opening; application readiness remains a separate gate. */
 (function () {
   'use strict';
   if (window.ChanjLoader) return;
   const scriptUrl = document.currentScript && document.currentScript.src;
   const assetBase = scriptUrl || new URL('loading.js', location.href);
   const artUrl = new URL('assets/loading/newspaper-hand.webp', assetBase).href;
+  const firebirdGlyphUrl = new URL('assets/brand/firebird-glyph.svg', assetBase).href;
   const markUrl = new URL('assets/brand/fly-eye.svg', assetBase).href;
-  const INTRO_MS = 3000, AIM_MS = 260, HIT_MS = 380, SETTLE_MS = 380, WELCOME_MS = 850, REVEAL_MS = 700;
+  const INTRO_MS = 2000, AIM_MS = 260, HIT_MS = 380, READ_HOLD_MS = 850, WELCOME_MS = 800;
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const defaults = { title: 'Preparing your world.', detail: 'Loading the experiment…', timeoutMs: 45000 };
   let root, dock, title, detail, phase, elapsed, dockTime, retryButton, flyNode, progressNode, numberNode;
   let cycle = null, visible = false, waitingForBody = false, pendingOptions = null, returnFocus = null;
   let geometry = { rx: 200, ry: 105, strikeY: -45 };
 
-  function currentTheme() {
-    const selected = document.documentElement.dataset.theme;
-    if (selected === 'noir' || selected === 'burgundy') return selected;
-    const query = new URLSearchParams(location.search).get('theme');
-    if (query === 'noir' || query === 'burgundy') return query;
-    try { if (localStorage.getItem('chanj-theme') === 'burgundy') return 'burgundy'; } catch (_) {}
-    return 'noir';
-  }
   function syncTheme() {
-    if (root) root.dataset.theme = currentTheme();
-    if (dock) dock.dataset.theme = currentTheme();
+    if (root) root.dataset.theme = 'burgundy';
+    if (dock) dock.dataset.theme = 'burgundy';
   }
   function makeCycle(settings) {
     let resolve, releaseHeavy;
@@ -63,9 +56,13 @@
 
   function paperFallback() {
     return `<svg class="cl-paper-fallback" viewBox="0 0 1200 800" aria-hidden="true"><g transform="translate(156 120) rotate(-42)">
-      <path d="M-55 0H55L66 560Q0 590-60 560Z" fill="#e9dfc8" stroke="#39302b" stroke-width="3"/>
-      <ellipse rx="55" ry="22" fill="#c7b99f" stroke="#39302b" stroke-width="3"/><ellipse rx="32" ry="10" fill="#50473d"/>
-      <text x="0" y="82" text-anchor="middle" fill="#27211f" font-family="Georgia, serif" font-weight="700" font-size="26">Firebird</text><path d="M-39 96h78" stroke="#403a33" stroke-width="3"/><text x="0" y="122" text-anchor="middle" fill="#27211f" font-family="Arial, sans-serif" font-weight="700" font-size="11"><tspan x="0">CHANJS WINS</tspan><tspan x="0" dy="17">FIREBIRD</tspan><tspan x="0" dy="17">HACKATHON</tspan></text><path d="M-38 205h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78m-78 45h78m-78 18h78m-78 18h78m-78 18h78" stroke="#655d4f" stroke-width="5"/>
+      <path d="M-95 0H95L110 560Q0 590-104 560Z" fill="#e9dfc8" stroke="#39302b" stroke-width="3"/>
+      <ellipse rx="95" ry="27" fill="#c7b99f" stroke="#39302b" stroke-width="3"/><ellipse rx="56" ry="15" fill="#50473d"/>
+      <text x="0" y="69" text-anchor="middle" fill="#27211f" font-family="Arial, sans-serif" font-weight="900" font-size="24">CHANJS WON</text>
+      <path d="M-81 80h162v9H-81z" fill="#ff632d"/>
+      <text x="0" y="118" text-anchor="middle" fill="#27211f" font-family="Arial, sans-serif" font-weight="700" font-size="23"><tspan x="0">FIREBIRD</tspan><tspan x="0" dy="28">HACKATHON</tspan></text>
+      <image href="${firebirdGlyphUrl}" x="-21" y="162" width="42" height="55"/>
+      <path d="M-80 240H80m-160 19H80m-160 19H80m-160 19H80m-160 45H80m-160 19H80m-160 19H80m-160 19H80m-160 45H80m-160 19H80m-160 19H80m-160 19H80" stroke="#655d4f" stroke-width="5"/>
       </g></svg>`;
   }
   function inkSplash() {
@@ -74,15 +71,15 @@
   function mount() {
     if (root) return;
     root = document.createElement('section'); root.className = 'chanj-loader'; root.hidden = true;
-    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'cl-title');
+    root.tabIndex = -1; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'cl-title');
     root.innerHTML = `<header class="cl-top"><span class="cl-brand"><img class="cl-brand-mark" alt="" width="28" height="28">CHANJS<span class="cl-brand-note">BRAIN / BODY / WORLD</span></span><button type="button" class="cl-hide">Skip intro <span aria-hidden="true">↗</span></button></header>
       <div class="cl-stage"><p class="cl-stage-label">THE CHANJS SIMULATION</p>
         <div class="cl-orbit-line" aria-hidden="true"></div>
-        <div class="cl-readout"><div class="cl-progress" role="progressbar" aria-label="Illustrated opening progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="cl-number" aria-hidden="true">00</span><span class="cl-percent-unit" aria-hidden="true">%</span></div><p class="cl-progress-label">INTRO · 3 SECONDS</p><p class="cl-preparing"><span class="cl-busy-dot" aria-hidden="true"></span>Opening complete · preparing simulation</p></div>
+        <div class="cl-readout"><div class="cl-progress" role="progressbar" aria-label="Illustrated opening progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="cl-number" aria-hidden="true">00</span><span class="cl-percent-unit" aria-hidden="true">%</span></div><p class="cl-progress-label">INTRO · 2 SECONDS</p><p class="cl-preparing"><span class="cl-busy-dot" aria-hidden="true"></span>Opening complete · preparing simulation</p></div>
         <div class="cl-fly" aria-hidden="true">${flyingFly()}</div>
         <div class="cl-strike-origin" aria-hidden="true"><div class="cl-paper-motion">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="high"></div></div>
         <div class="cl-splash" aria-hidden="true">${inkSplash()}</div>
-        <div class="cl-welcome" aria-hidden="true"><span class="cl-welcome-kicker">BRAIN / BODY / WORLD</span><p>Welcome to the<br><strong>Chanjs simulation.</strong></p><span class="cl-welcome-rule"></span></div>
+        <div class="cl-welcome" aria-hidden="true"><p><span class="cl-welcome-lead">Welcome to the</span><strong><span>Chanjs</span> <span>simulation.</span></strong></p></div>
         <p class="cl-illustration">Illustrated introduction</p>
       </div>
       <footer class="cl-bottom"><div class="cl-copy"><h2 id="cl-title"></h2><div class="cl-status"><span class="cl-status-mark" aria-hidden="true"></span><div><p class="cl-phase">LOADING</p><p class="cl-detail" role="status" aria-live="polite" aria-atomic="true"></p></div></div></div><div class="cl-actions"><button type="button" class="cl-retry" hidden>Retry loading <span aria-hidden="true">↗</span></button></div><div class="cl-time"><span>ELAPSED</span><output role="timer" aria-live="off">00:00</output></div></footer>`;
@@ -110,7 +107,8 @@
     root.addEventListener('keydown', event => {
       if (event.key === 'Escape') { event.preventDefault(); hide(); }
       if (event.key !== 'Tab') return;
-      const buttons = [...root.querySelectorAll('button')].filter(button => !button.hidden && !button.disabled);
+      const buttons = [...root.querySelectorAll('button')].filter(button => !button.hidden && !button.disabled && button.offsetParent !== null && getComputedStyle(button).visibility !== 'hidden');
+      if (!buttons.length) { event.preventDefault(); root.focus({ preventScroll: true }); return; }
       const first = buttons[0], last = buttons[buttons.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -193,16 +191,6 @@
     document.documentElement.classList.remove('chanj-loading-lock'); if (hadFocus) restoreFocus();
     c.resolve();
   }
-  function beginExit(c, duration) {
-    if (!c.ready || c.failed || c.ended || c.scene === 'revealing') return;
-    c.scene = 'revealing'; stopFrame(c);
-    if (!visible || !duration) { complete(c); return; }
-    root.style.setProperty('--cl-exit-ms', `${duration}ms`); root.dataset.exiting = 'true';
-    const serial = c.serial;
-    c.exitListener = event => { if (event.target === root && event.propertyName === 'opacity' && c.serial === serial) complete(c); };
-    root.addEventListener('transitionend', c.exitListener);
-    c.exitTimer = window.setTimeout(() => { if (c.serial === serial) complete(c); }, duration + 80);
-  }
   function openingComplete(c) {
     if (c.failed || c.ended) return;
     c.introDone = true; c.displayed = 1; c.scene = 'waiting'; stopFrame(c);
@@ -212,7 +200,11 @@
   function impact(c) {
     if (c.failed || c.ended) return;
     c.scene = 'impact'; root.dataset.cinema = 'impact'; putFly(c, 0, geometry.strikeY, 12);
-    later(c, () => openingComplete(c), SETTLE_MS);
+    // Two frames put the stationary headline on screen before expensive app work starts.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (cycle === c && !c.ended && !c.failed) releaseHeavyWork(c);
+    }));
+    later(c, () => openingComplete(c), READ_HOLD_MS);
   }
   function beginStrike(c) {
     c.displayed = 1; renderProgress(c); c.scene = 'strike'; root.dataset.cinema = 'strike';
@@ -221,8 +213,9 @@
   }
   function welcome(c) {
     if (!c.ready || c.failed || !c.introDone || ['welcome', 'revealing'].includes(c.scene)) return;
-    c.scene = 'welcome'; root.dataset.cinema = 'welcome'; stopFrame(c);
-    later(c, () => beginExit(c, c.reduced ? 0 : REVEAL_MS), c.reduced ? 160 : WELCOME_MS);
+    c.scene = 'welcome'; root.dataset.cinema = 'welcome'; root.dataset.exiting = 'true'; stopFrame(c);
+    root.focus({ preventScroll: true });
+    later(c, () => complete(c), c.reduced ? 160 : WELCOME_MS);
   }
   function advance(c) {
     if (!c.mounted || c.ended || c.failed) return;
@@ -262,7 +255,7 @@
     if (typeof settings.retry === 'function') c.retry = settings.retry;
     root.dataset.state = c.failed ? 'error' : (c.ready ? 'ready' : 'loading');
     root.dataset.mode = 'cinematic'; root.dataset.heavy = c.heavyReleased ? 'allowed' : 'deferred'; delete root.dataset.introComplete; root.dataset.motion = c.reduced ? 'reduced' : 'full'; root.dataset.cinema = 'orbit';
-    delete root.dataset.exiting; root.querySelector('.cl-progress-label').textContent = 'INTRO · 3 SECONDS'; root.setAttribute('aria-busy', c.ready ? 'false' : 'true');
+    delete root.dataset.exiting; root.querySelector('.cl-progress-label').textContent = 'INTRO · 2 SECONDS'; root.setAttribute('aria-busy', c.ready ? 'false' : 'true');
     title.textContent = settings.title; detail.textContent = c.ready ? 'Your world is ready.' : settings.detail;
     phase.textContent = c.failed ? 'LOADING STOPPED' : (c.ready ? 'READY' : 'LOADING');
     retryButton.hidden = !c.failed; dock.querySelector('.cl-dock-text').textContent = 'Loading continues'; returnFocus = document.activeElement;

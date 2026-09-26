@@ -6,16 +6,15 @@ const controls = $('controls');
 const brainDetails = $('brain-details');
 const help = $('help-dialog');
 const desktop = matchMedia('(min-width:1100px)');
-const THEME_KEY = 'chanj-theme';
 const COACH_KEY = 'chanj-intro-seen-v2';
-let activeView = 'arena';
+let activeView = 'both';
 const dialogOpeners = new WeakMap();
 let coachTimer = 0;
 
 const explanations = {
   about: {
     kicker: 'MEET CHANJS', title: 'A little body. A connected brain.',
-    content: '<p>Explore how signals in a modeled fruit-fly brain relate to movement in its world.</p><p class="help-fact"><strong>138,639 neurons.</strong> FlyWire connectivity, a NeuroMechFly body, and an interactive view of their modeled behavior.</p><p>Use <strong>Arena</strong> to follow the fly and <strong>Brain</strong> to explore activity. On a computer the settings stay open. On a phone, tap <strong>Controls</strong> and drag the panel down to close it.</p><p><a href="https://github.com/K4ryan/Chanjs/blob/main/embodied/README.md" target="_blank" rel="noreferrer">Model, sources &amp; assumptions ↗</a></p><p class="legal-note">FlyWire data: noncommercial use. Base code © Nic Dunzelman, MIT. NeuroMechFly: Apache-2.0. Three.js: MIT.</p>'
+    content: '<p>Explore how signals in a modeled fruit-fly brain relate to movement in its world.</p><p class="help-fact"><strong>138,639 neurons.</strong> FlyWire connectivity, a NeuroMechFly body, and an interactive view of their modeled behavior.</p><p>The <strong>Both</strong> view shows the arena above the brain on a phone. Tap the expand icon or choose <strong>Arena</strong> or <strong>Brain</strong> for a closer look, then return to <strong>Both</strong>. On a computer the settings stay open. On a phone, tap <strong>Controls</strong> in the header and drag the panel down to close it.</p><p><a href="https://github.com/K4ryan/Chanjs/blob/main/embodied/README.md" target="_blank" rel="noreferrer">Model, sources &amp; assumptions ↗</a></p><p class="legal-note">FlyWire data: noncommercial use. Base code © Nic Dunzelman, MIT. NeuroMechFly: Apache-2.0. Three.js: MIT.</p>'
   },
   arena: {
     kicker: '01 / THE BODY', title: 'Follow a small decision.',
@@ -35,7 +34,7 @@ const explanations = {
   },
   newspaper: {
     kicker: 'A PLAYFUL LAYER', title: 'Watch the newspaper.',
-    content: '<p><strong>Newspaper mode</strong> shows food as an apple or sugar cubes, and danger as a newspaper. It adds collision and win/lose rules to the scene.</p><p>Choose the food appearance in <strong>Controls → Arena</strong>. This changes the visual object only; the food signal and model stay the same.</p><p>These are game rules layered over the model. Being caught by the newspaper is not a biological finding.</p><p>Tap <strong>Newspaper</strong> in the arena to toggle the mode. You can drag the newspaper and food to move them.</p>'
+    content: '<p><strong>Newspaper mode</strong> shows food as an apple and danger as a newspaper. It adds collision and win/lose rules to the scene.</p><p>These are game rules layered over the model. Being caught by the newspaper is not a biological finding.</p><p>Enlarge <strong>Arena</strong> and tap <strong>Newspaper</strong> to toggle the mode. You can drag the newspaper and food to move them.</p>'
   },
   gestures: {
     kicker: 'EXPLORE THE WORLD', title: 'A few small gestures.',
@@ -57,26 +56,20 @@ function normalizeIcons() {
     use.setAttribute('href', `${page}#${original}`);
   });
 }
-function setTheme(theme, updateUrl = true) {
-  if (!['noir', 'burgundy'].includes(theme)) theme = 'noir';
-  root.dataset.theme = theme;
-  try { localStorage.setItem(THEME_KEY, theme); } catch {}
-  if (updateUrl) {
-    const url = new URL(location.href);
-    url.searchParams.set('theme', theme);
-    history.replaceState(history.state, '', url);
-  }
-  document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme)));
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'burgundy' ? '#170b13' : '#080809');
+function applyBurgundy() {
+  root.dataset.theme = 'burgundy';
+  try { localStorage.setItem('chanj-theme', 'burgundy'); } catch {}
+  const url = new URL(location.href);
+  if (url.searchParams.has('theme')) { url.searchParams.delete('theme'); history.replaceState(history.state, '', url); }
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#170b13');
   normalizeIcons();
-  window.dispatchEvent(new CustomEvent('chanj:themechange', { detail: { theme } }));
 }
 function setView(view) {
-  activeView = view === 'brain' ? 'brain' : 'arena';
+  activeView = ['both', 'arena', 'brain'].includes(view) ? view : 'both';
   body.dataset.view = activeView;
   document.querySelectorAll('[data-view-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.viewChoice === activeView)));
-  $('arena').setAttribute('aria-hidden', String(!desktop.matches && activeView !== 'arena'));
-  $('brainview').setAttribute('aria-hidden', String(!desktop.matches && activeView !== 'brain'));
+  $('arena').setAttribute('aria-hidden', String(!desktop.matches && activeView === 'brain'));
+  $('brainview').setAttribute('aria-hidden', String(!desktop.matches && activeView === 'arena'));
   hideCoach();
 }
 function showControlTab(tab) {
@@ -150,13 +143,12 @@ function showCoach() {
   coachTimer = setTimeout(hideCoach, 7000);
 }
 
-for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
 for (const button of document.querySelectorAll('[data-view-choice]')) button.addEventListener('click', () => setView(button.dataset.viewChoice));
 for (const button of document.querySelectorAll('[data-open-controls]')) button.addEventListener('click', () => openControls(button.dataset.openControls, button));
 for (const button of document.querySelectorAll('[data-control-tab]')) button.addEventListener('click', () => showControlTab(button.dataset.controlTab));
 for (const button of document.querySelectorAll('[data-brain-tab]')) button.addEventListener('click', () => showBrainTab(button.dataset.brainTab));
 for (const button of document.querySelectorAll('[data-brain-panel]')) button.addEventListener('click', () => { showBrainTab(button.dataset.brainPanel); openDialog(brainDetails, button); });
-$('brain-group').addEventListener('change', () => { setView('brain'); closeDialog(brainDetails); });
+$('brain-group').addEventListener('change', () => { if (activeView === 'arena') setView('brain'); closeDialog(brainDetails); });
 for (const button of document.querySelectorAll('[data-help]')) button.addEventListener('click', () => openHelp(button.dataset.help, button));
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => closeDialog(button.closest('dialog')));
 for (const dialog of document.querySelectorAll('dialog')) {
@@ -254,12 +246,8 @@ for (const id of ['replay-baseline', 'replay-modulated']) {
 }
 desktop.addEventListener('change', () => { setView(activeView); syncControlsLayout(); });
 document.addEventListener('chanj:ready', () => { syncPlayback(); showCoach(); });
-document.addEventListener('chanj:encounter', () => { hideCoach(); setView('arena'); closeDialog(controls); });
-window.addEventListener('popstate', () => {
-  const theme = new URL(location.href).searchParams.get('theme');
-  if (theme) setTheme(theme, false);
-});
-setTheme(root.dataset.theme, new URLSearchParams(location.search).get('theme') === 'orange');
-setView('arena');
+document.addEventListener('chanj:encounter', () => { hideCoach(); if (activeView === 'brain') setView('arena'); closeDialog(controls); });
+applyBurgundy();
+setView('both');
 syncControlsLayout();
 syncPlayback();

@@ -9,7 +9,13 @@ STATIC = ROOT / "sandbox"
 RUNS = ROOT / "results" / "sandbox"
 # Shared presentation resources are exact mappings. Never expose ROOT.parent
 # as a general static directory: it can contain local environments and data.
-SHARED_FILES = {f"/{name}": ROOT.parent / name for name in ("loading.js", "loading.css")}
+PRESENTATION_FILES = (
+    "loading.js", "loading.css", "assets/loading/newspaper-hand.webp",
+    "assets/brand/fly-eye.svg", "assets/brand/firebird-glyph.svg", "assets/brand/firebird-wordmark.svg",
+    "assets/fonts/space-grotesk-bold.ttf", "assets/fonts/PressStart2P-Regular.ttf",
+    "assets/fonts/OFL.txt", "assets/fonts/PressStart2P-OFL.txt",
+)
+SHARED_FILES = {f"/{name}": ROOT.parent / name for name in PRESENTATION_FILES}
 FEEDING_FILES = (
     "index.html", "about.html", "style.css", "model.js", "body.js", "draw.js", "app.js",
     "loading.js", "loading.css", "LICENSE", "data/connectome.js", "data/modulators.js",

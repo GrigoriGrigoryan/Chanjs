@@ -1,19 +1,22 @@
 <!doctype html>
-<html lang="en" data-theme="noir">
+<html lang="en" data-theme="burgundy">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#080809">
+<meta name="theme-color" content="#170b13">
 <title>CHANJS — Brain &amp; behavior</title>
 <meta name="description" content="A small body. A world of connections. Explore a FlyWire brain, an embodied preview, and recorded whole-brain experiments.">
 <link rel="icon" type="image/svg+xml" href="../../assets/brand/fly-eye.svg">
-<script>try{const t=new URL(location.href).searchParams.get('theme')||localStorage.getItem('chanj-theme');if(t==='burgundy')document.documentElement.dataset.theme=t;else document.documentElement.dataset.theme='noir';}catch{}</script>
+<script>document.documentElement.dataset.theme='burgundy';try{localStorage.setItem('chanj-theme','burgundy');}catch{}</script>
 <link rel="stylesheet" href="mobile.css">
 <link rel="stylesheet" href="../../loading.css">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
 </head>
-<body data-view="arena">
+<body data-view="both">
 <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+<symbol id="i-both" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="7" rx="1"/><rect x="4" y="14" width="16" height="7" rx="1"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6m16-10-7 7M4 20l7-7"/></symbol>
+<symbol id="i-label" viewBox="0 0 24 24"><path d="M5 7V4h14v3M12 4v16m-4 0h8"/></symbol>
 <symbol id="i-arena" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
 <symbol id="i-brain" viewBox="0 0 24 24"><path d="M12 4c-2-3-6-1-6 2-4 0-5 6-2 8-1 4 4 7 8 4V4Zm0 0c2-3 6-1 6 2 4 0 5 6 2 8 1 4-4 7-8 4"/><path d="M6 6c0 3 3 3 3 3M4 14c2-2 4-1 4 1m10-9c0 3-3 3-3 3m5 5c-2-2-4-1-4 1"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol>
@@ -33,18 +36,14 @@
 <header class="app-header">
   <div class="brand"><img class="brand-mark" src="../../assets/brand/fly-eye.svg" width="44" height="44" alt=""><div><strong>CHANJS</strong><span>Brain &amp; behavior</span></div></div>
   <div class="header-actions">
-    <button class="desktop-controls" data-open-controls="behavior" aria-haspopup="dialog"><svg><use href="#i-sliders"/></svg>Controls</button>
-    <div class="theme-switch" role="group" aria-label="Color theme">
-      <button type="button" data-theme-choice="noir" aria-label="Noir theme" aria-pressed="true" title="Noir"><i class="theme-swatch swatch-noir"></i><span>Noir</span></button>
-      <button type="button" data-theme-choice="burgundy" aria-label="Burgundy theme" aria-pressed="false" title="Burgundy"><i class="theme-swatch swatch-burgundy"></i><span>Burgundy</span></button>
-    </div>
+    <button class="header-controls" data-open-controls="behavior" aria-haspopup="dialog"><svg><use href="#i-sliders"/></svg>Controls</button>
     <button class="icon-button help-trigger" data-help="about" aria-label="About Chanjs"><svg><use href="#i-info"/></svg></button>
   </div>
 </header>
 
 <main class="app" id="workspace" aria-label="Brain and behavior workspace">
   <section class="view scene-arena" id="arena" aria-label="Fly arena">
-    <div class="scene-heading"><span class="scene-number">01</span><h1>Body in the world</h1><button class="icon-button" data-help="arena" aria-label="About the arena"><svg><use href="#i-info"/></svg></button></div>
+    <div class="scene-heading"><span class="scene-number">01</span><h1><span class="full-title">Body in the world</span><span class="compact-title">Arena</span></h1><button class="icon-button" data-help="arena" aria-label="About the arena"><svg><use href="#i-info"/></svg></button><button class="icon-button scene-expand" data-view-choice="arena" aria-label="Enlarge arena" title="Enlarge arena"><svg><use href="#i-expand"/></svg></button></div>
     <div class="hud" id="hud-tl"><div class="metric"><span>Fly time</span><strong id="h-time">0.00 s</strong></div><div class="metric"><span>To food</span><strong id="h-dist">30.0 mm</strong></div><span class="live-status" id="h-status">Preparing…</span></div>
     <div class="scene-tools" id="hud-tr">
       <button id="props-btn" class="newspaper-button" aria-label="Toggle newspaper game mode" title="Newspaper mode"><svg><use href="#i-paper"/></svg><span>Newspaper</span></button>
@@ -56,8 +55,8 @@
     <div id="game" class="game hidden"><div class="game-card"><span class="game-eyebrow">CHANJS ARCADE · NEWSPAPER MODE</span><svg class="game-emblem" viewBox="0 0 40 28" aria-hidden="true" shape-rendering="crispEdges"><g class="pixel-fly"><path fill="#eee4ce" d="M2 4h10v4h4v8H6v-4H2zm36 0H28v4h-4v8h10v-4h4z"/><path fill="#c33450" d="M12 0h6v4h4V0h6v8h-4v12h-2v8h-4v-8h-2V8h-4z"/><path fill="#fff0d8" d="M16 4h2v4h-2zm6 0h2v4h-2z"/><path fill="#462132" d="M16 14h8v2h-8zm2 8h4v2h-4z"/></g><g class="pixel-star"><path fill="#f3c75f" d="M18 0h4v8h8v4h10v4H28v8h-4v4h-8v-4h-4v-8H0v-4h10V8h8z"/><path fill="#fff1a8" d="M18 8h4v12h-4zm-6 4h16v4H12z"/></g></svg><div class="game-title" id="game-title">Caught.</div><div class="game-sub" id="game-sub"></div><button id="game-again" class="primary">Try again</button><div class="game-hint" id="game-hint"></div></div></div>
   </section>
   <section class="view scene-brain" id="brainview" aria-label="Brain activity">
-    <div class="scene-heading" id="brain-title"><span class="scene-number">02</span><h2>Inside the brain</h2><button class="icon-button" data-help="brain" aria-label="About brain activity"><svg><use href="#i-info"/></svg></button><span class="sr-only" id="brain-mode">sampled activity from measured rates</span></div>
-    <div id="brain-tools"><button id="focus-btn" class="compact-button on" aria-label="Toggle decision focus"><svg><use href="#i-target"/></svg>Decision focus</button><button id="brain-labels" class="compact-button" aria-label="Brain labels" aria-pressed="true"><svg><use href="#i-info"/></svg>Labels</button></div>
+    <div class="scene-heading" id="brain-title"><span class="scene-number">02</span><h2><span class="full-title">Inside the brain</span><span class="compact-title">Brain</span></h2><button class="icon-button" data-help="brain" aria-label="About brain activity"><svg><use href="#i-info"/></svg></button><button class="icon-button scene-expand" data-view-choice="brain" aria-label="Enlarge brain" title="Enlarge brain"><svg><use href="#i-expand"/></svg></button><span class="sr-only" id="brain-mode">sampled activity from measured rates</span></div>
+    <div id="brain-tools"><button id="focus-btn" class="compact-button on" aria-label="Toggle decision focus" aria-pressed="true" title="Decision focus: highlight approach and avoidance signals"><svg><use href="#i-target"/></svg><span>Decision focus</span></button><button id="brain-labels" class="compact-button" aria-label="Brain labels" aria-pressed="true" title="Labels: show neural group names"><svg><use href="#i-label"/></svg><span>Labels</span></button></div>
     <div class="brain-actions"><button data-brain-panel="groups"><svg><use href="#i-brain"/></svg>Neuron groups</button><button data-brain-panel="pathway"><svg><use href="#i-spark"/></svg>Why this choice?</button></div>
     <div class="scene-caption">138,639 neurons<span>One connected system.</span></div>
   </section>
@@ -69,9 +68,9 @@
   <div class="playback" id="playback"><div class="playback-row"><button class="primary play-button" id="pb-play">Play recording</button><button class="compact-button" id="pb-live">Exit replay</button><label class="speed-control"><span class="sr-only">Recording speed</span><select id="pb-speed" aria-label="Recording playback speed"><option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option></select></label></div><input type="range" id="pb-scrub" aria-label="Recording position" min="0" max="1000" value="0"></div>
 </div>
 <nav class="mode-nav" aria-label="Explore Chanjs">
-  <button data-view-choice="arena" aria-pressed="true"><svg><use href="#i-arena"/></svg><span>Arena</span><i></i></button>
+  <button data-view-choice="both" aria-pressed="true"><svg><use href="#i-both"/></svg><span>Both</span><i></i></button>
+  <button data-view-choice="arena" aria-pressed="false"><svg><use href="#i-arena"/></svg><span>Arena</span><i></i></button>
   <button data-view-choice="brain" aria-pressed="false"><svg><use href="#i-brain"/></svg><span>Brain</span><i></i></button>
-  <button data-open-controls="behavior" aria-haspopup="dialog"><svg><use href="#i-sliders"/></svg><span>Controls</span><i></i></button>
 </nav>
 
 <dialog class="sheet controls-sheet panel" id="controls" aria-labelledby="controls-title">
@@ -93,7 +92,6 @@
     <section data-control-panel="arena" hidden>
       <div class="section-title"><h3>Set the scene.</h3><button class="icon-button" data-help="newspaper" aria-label="About newspaper mode"><svg><use href="#i-info"/></svg></button></div>
       <p class="intro-note">Move food and danger directly in the arena.</p>
-      <div class="select-field"><label for="food-style">Food appearance</label><select id="food-style" aria-describedby="food-style-note"><option value="apple">Apple</option><option value="sugar">Sugar cubes</option></select><p id="food-style-note">Shown in Newspaper mode. The food signal stays the same.</p></div>
       <div class="knob"><div class="row"><label for="danger"><span class="dot" style="--dot:var(--danger)"></span>Danger strength</label><output class="val" id="v-danger">1.60</output></div><input type="range" id="danger" aria-describedby="danger-effect" min="0" max="3" step="0.05" value="1.6"><div class="range-ends"><span>None</span><span>Strong</span></div><p class="control-effect" id="danger-effect">Stronger sources increase the model’s turn-away reflex.</p></div>
       <div class="knob"><div class="row"><label for="heading">Starting direction</label><output class="val" id="v-heading">0°</output></div><input type="range" id="heading" aria-describedby="heading-effect" min="-180" max="180" step="5" value="0"><div class="range-ends"><span>−180°</span><span>0°</span><span>180°</span></div><p class="control-effect" id="heading-effect">Sets the direction the fly faces at the start.</p></div>
       <div class="btns"><button id="reset-pos">Reset positions</button><button id="rand-heading">Random direction</button></div>
@@ -119,7 +117,7 @@
 </dialog>
 
 <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title"><div class="help-top"><span class="help-symbol"><svg><use href="#i-info"/></svg></span><button class="icon-button" data-close-dialog aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><span class="eyebrow" id="help-kicker">A QUICK GUIDE</span><h2 id="help-title">Welcome to Chanjs.</h2><div id="help-content"></div><button class="primary help-done" data-close-dialog>Got it<svg><use href="#i-arrow"/></svg></button></dialog>
-<div class="coachmark" id="coachmark" hidden><svg><use href="#i-hand"/></svg><p>Meet your fly.<span>Drag the scene. Try a different signal in Controls.</span></p><button class="icon-button" id="dismiss-coach" aria-label="Dismiss tip"><svg><use href="#i-close"/></svg></button></div>
+<div class="coachmark" id="coachmark" hidden><svg><use href="#i-hand"/></svg><p>Body and brain, together.<span>Use the expand icons for a closer look. Both brings you back.</span></p><button class="icon-button" id="dismiss-coach" aria-label="Dismiss tip"><svg><use href="#i-close"/></svg></button></div>
 <script type="module" src="ui.js"></script>
 <script type="module">import('./app.js').catch(error=>{console.error(error);window.ChanjLoader?.fail('The sandbox could not start. Check your connection and WebGL support, then retry.',()=>location.reload());});</script>
 </body>

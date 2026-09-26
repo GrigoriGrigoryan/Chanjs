@@ -1,86 +1,67 @@
-# CHANJS — a consistent illustrated opening
+# CHANJS — two seconds, a newspaper, and a type-only reveal
 
-Every visit plays the same three-second opening: a fly circles a large counter marked **INTRO · 3 SECONDS**, then a Firebird newspaper swats it at 100%. A quiet ink splash settles before a glass-like card says “Welcome to the Chanjs simulation.” The counter measures the opening's timeline. It does not claim to measure downloads or preparation work.
+Every visit uses the same Burgundy opening. A fly circles a counter labeled **INTRO · 2 SECONDS**. At 100%, the newspaper strikes, then pauses so its winning headline can be read. The final welcome contains only oversized local typography: “Welcome to the Chanjs simulation.” The words approach the viewer and fade while the Burgundy background clears to reveal the actual simulation.
 
-There is no seen marker, cache-dependent bypass, or returning-visit shortcut. The loader never reads or writes the old `chanjs-intro-v4` marker. `?intro=1` is harmless but no longer necessary to replay the scene. Cached and uncached visits follow the same timeline.
+There is no card, logo, header, footer, counter, caption, or loading control around the welcome. The loader's other elements are hidden for that brief final stage. Before and after it, normal loading/retry controls remain available. The loader ignores saved theme choices and theme query values; it is always Burgundy. No seen marker or returning-visit bypass is used.
 
-The scene is an “Illustrated introduction,” separate from scientific recordings, neural activity, and the actual simulation's newspaper encounter. Noir and Burgundy share the same composition, face/proboscis fly mark, and authored flying illustration.
+The number measures the illustrated opening's timeline, not downloads or preparation work. The visible “Illustrated introduction” caption before the welcome distinguishes this scene from neural activity, recordings, and the actual simulated newspaper encounter.
 
-## Timeline and two independent gates
+## Timing and public API
 
-The number is `floor(clamp((frameTimestamp - visibleAt) / 3000, 0, 1) * 100)`. It uses requestAnimationFrame and elapsed time directly, without exponential smoothing, measured-resource jumps, or a timer estimate of remaining download time. The fly moves toward the shared contact point during the last 260ms. At three seconds the number reaches 100 and the 380ms newspaper strike begins; the 380ms impact/recoil then settles. A browser that cannot supply frames cannot display every intermediate integer, but missed frames do not lengthen the intended timeline.
+The number is `floor(clamp((frameTimestamp - visibleAt) / 2000, 0, 1) * 100)`. It uses requestAnimationFrame and elapsed time directly. `progress(fraction)` remains accepted for compatibility but cannot change the intro counter. Resource completion and browser caching therefore do not change the counter's intended two-second duration. A browser that misses frames may omit intermediate integers, without extending the intended timeline.
 
-**`beforeHeavyWork(): Promise<void>`** lets application startup defer heavy decoding, allocation, scene construction, GPU initialization, and rendering until the moving opening has finished. It normally resolves after the three-second counter plus strike and settle, approximately 3.76 seconds. It resolves immediately when the user skips, requests reduced motion, or an error stops the opening, so startup cannot deadlock on a failed decoration. It does not mean assets are ready and never releases the application's final entry gate.
+The normal sequence is:
 
-**`finish(): Promise<void>`** signals actual application readiness. Its promise resolves only after both the opening and real preparation have completed and the overlay/status dock are actually hidden. Repeated calls share the same promise and do not restart anything. The application awaits this gate before resetting and starting the simulation clock.
+1. **2,000ms counter**, with the fly moving toward the contact point during the last 260ms.
+2. **380ms newspaper strike**, beginning at 100%.
+3. **850ms readable headline hold**. Desktop holds the contact pose. Mobile gently shifts the paper left and rotates it 14 degrees in the first 220ms so the headline sits inside the narrow viewport, then holds it still for about 630ms.
+4. **800ms type-only reveal**, once the real simulation is ready. Large Space Grotesk text moves forward and fades; the Burgundy background becomes transparent, exposing the already-rendered simulation behind it.
 
-If actual preparation is slow, the completed opening stays at 100 with **INTRO COMPLETE** and a separate quiet busy indicator: **Opening complete · preparing simulation**. The fly and newspaper remain settled. Neither the count nor the orbit restarts. Actual resource details continue in the footer.
+With assets ready in time, this is approximately **4.03 seconds overall**, faster than the previous opening. If preparation takes longer, the reading hold leads to a static **INTRO COMPLETE** view with the separate message **Opening complete · preparing simulation** and actual preparation details. The orbit, count, and newspaper do not restart.
 
-Once both conditions are satisfied, the welcome card enters over 220ms, holds fully visible for approximately 630ms, and the whole overlay fades over 700ms. Thus the numbered opening is three seconds; the readable welcome and reveal are additional presentation time. Actual preparation can extend the waiting period. There is no claim that the entire application becomes ready in three seconds.
+`beforeHeavyWork(): Promise<void>` releases after impact has painted through two animation frames, normally around 2.42 seconds. This lets expensive data/scene/GPU work overlap the newspaper's reading hold instead of interrupting the counter or strike. Network requests can run earlier. The gate also releases immediately on skip, reduced motion, or a stopped/error state, preventing a startup deadlock. It does not imply actual application readiness.
+
+`finish(): Promise<void>` signals actual readiness, and resolves only after the opening/readable hold and final reveal are complete and the overlay/status dock are actually hidden. Repeated calls return the same promise and never restart the sequence. Application code must await it before starting the simulation clock.
 
 ```js
-ChanjLoader.show({
-  title: 'Preparing your world.',
-  detail: 'Loading fly geometry and measured decision tables…',
-  timeoutMs: 45000
-});
-// Network work may overlap the introduction when useful.
+ChanjLoader.show({ title: 'Preparing your world.', detail: 'Loading the experiment…' });
+const requests = startNetworkRequests();
 await ChanjLoader.beforeHeavyWork();
-await constructAndWarmUpTheActualApplication();
-ChanjLoader.update('Simulation prepared.');
+await prepareAndRenderTheActualSimulation(requests);
 await ChanjLoader.finish();
-// Start/reset the simulation clock and autoplay only now.
+// Reset/start the simulation clock and autoplay now.
 ```
 
-`progress(fraction)` remains available for compatibility with existing preparation reporting, but it never changes the intro counter. `show`, `update`, `fail(message, retry)`, and `hide` retain their signatures. The elapsed footer measures time from showing the loader to actual readiness/failure and stops at that event. It is separate from the opening timeline.
+`show`, `update`, `fail(message, retry)`, and `hide` retain their signatures. `show` accepts `timeoutMs` and an optional retry callback. The elapsed footer measures time from showing the loader to actual readiness/failure, separately from the two-second presentation.
 
 ## Skip, reduced motion, failure, and retry
 
-Skip intro, Escape, and `hide()` stop the choreography and release the heavy-work gate immediately. If the application is still loading, a compact status button remains. Skipping never implies readiness. Reopening that status button shows the completed opening with the actual waiting status.
+Skip intro, Escape, and `hide()` stop the choreography and release the heavy-work gate immediately. If preparation is unfinished, the status dock remains. Skipping never invents readiness. Opening the dock returns to the simple, completed-intro waiting state.
 
-Reduced motion omits the traveling fly/newspaper and moving count, immediately releases the heavy-work gate, and uses a static completed-intro view while preparation continues. After readiness it shows a still welcome for 160ms and hides without a traveling/fading transition. Preference changes during the opening also take this route. The native reduced-motion CSS is present alongside the script's preference handling.
+Reduced motion skips the traveling count/fly/newspaper, releases heavy work immediately, and waits honestly for preparation. It then shows a static welcome for 160ms before hiding. The loader responds to preference changes during a load; native reduced-motion CSS is also present. No operating-system setting is changed by the application.
 
-A failure cancels any pending scene/welcome/reveal, clears readiness and numeric announcements, shows a dash, and exposes Retry. Existing finish waiters remain pending. A stale `finish()` while failed cannot clear the error: Retry or explicit `show()` must reset the attempt first. Retry preserves the original finish promise and shows a quiet completed-opening state, without replaying the three-second scene inside that failed attempt. A later navigation always runs the full opening again.
+During the type-only welcome, focus moves to the dialog itself. Escape still skips, and Tab stays contained even though the visible loading buttons are hidden. Outside that stage, buttons are at least 44px high. The numeric progressbar is named “Illustrated opening progress.” Actual status is a polite live region; the elapsed clock is non-announcing. Decorative artwork is hidden from assistive technology.
 
-`show` and `fail` accept optional retry callbacks. The callback must call `finish()` after successful readiness; merely resolving the callback does not release the gate. Without a callback, Retry reloads the current URL. The configurable timeout reports that preparation is taking longer and permits retry while continuing to accept real readiness. It does not invent completion or a network failure.
+Failure cancels pending choreography/reveal, revokes readiness, clears numeric announcements, shows a dash, and exposes Retry. A stale `finish()` in the failed state cannot clear the error. Retry or explicit `show()` must reset the attempt; existing finish waiters remain pending until a successful actual-ready signal and completed reveal. Retry uses a quiet completed-opening view rather than replaying the scene inside that failed attempt. A later visit always runs the full opening.
 
-A transition-end listener resolves the entry gate after opacity reaches its end. Its timer fallback explicitly hides the DOM before resolving. Error during the fade cancels both paths until a successful retry.
+Retry callbacks must explicitly call `finish()` after success; their own resolution does not release the entry gate. Without a callback, Retry reloads the current URL. The configurable timeout reports slow preparation and offers retry without declaring false failure or readiness. Failure during the type reveal cancels the final completion timer and restores the error surface.
 
-## Visual and accessibility behavior
+## Composition, assets, and provenance
 
-The newspaper contact, fly's final position, and ink share a stage-relative anchor. The photographic contact point is 13% across and 15% down the image box; the impact transform translates this point onto the fly. This keeps the hit aligned across viewports. The stage clips incoming art and prevents horizontal panning on phones. The glass welcome uses a restrained translucent gradient, soft border, backdrop blur, and a short accent rule.
+The fly center, newspaper contact, and ink share a stage-relative anchor. The paper image's contact point is 13% across and 15% down its source box. The impact transform places that point exactly at the fly center. On mobile, only the subsequent reading pose changes; the collision stays aligned. The stage clips incoming artwork to prevent horizontal panning.
 
-The dialog has a polite actual-status region, an accessible progressbar named “Illustrated opening progress,” focus handling, Escape support, and controls at least 44px high. Decorative artwork is hidden from assistive technology. The elapsed timer does not announce each tick. Long failure messages can scroll vertically on short screens.
+Runtime artwork is `assets/loading/newspaper-hand.webp`, 1200 × 800 alpha, 108,890 bytes. The current image was edited via the built-in ImageGen tool; its preserved source is `assets/loading/source/newspaper-firebird-won-alpha.png` and its exact prompt is in `firebird-won-provenance.json` beside it. It carries the user's requested winning headline, with “CHANJS WON” leading “FIREBIRD HACKATHON,” orange print, and the official Firebird glyph. The decorative artwork is not evidence establishing an award.
 
-## Assets and integration
+The code-native fallback uses the same lead wording, an orange rule, and `assets/brand/firebird-glyph.svg`. That official glyph is sourced from `https://www.firebird.ai/assets/glyph-gradient.svg`; the parent task preserves the source. The fly, proboscis, ink, fallback newspaper geometry, orbit, and choreography are authored SVG/CSS/JavaScript. No second WebGL renderer is created.
 
-Load `loading.js` and `loading.css` before application initialization. Image paths derive from the script URL; the font path is relative to the stylesheet. The build versions those URLs to avoid cached old artwork/scripts. Theme selection follows the document root `data-theme`, then `?theme=noir|burgundy`, then the `chanj-theme` preference. Root attribute changes and `chanj:themechange` update the loader.
-
-- Runtime photograph: `assets/loading/newspaper-hand.webp`, 1200 × 800 alpha WebP, 103,666 bytes.
-- Updated generated source: `assets/loading/source/newspaper-firebird-alpha.png`.
-- Firebird edit provenance and exact prompt: `assets/loading/source/firebird-provenance.json`.
-- Original cutout and its prompts remain in `assets/loading/source/newspaper-hand-alpha.png` and `generation-provenance.json`.
-- Shared authored fly face and proboscis mark: `assets/brand/fly-eye.svg`.
-- Typeface: local `assets/fonts/space-grotesk-bold.ttf`, weight 700, with its OFL license in `assets/fonts`. It uses `font-display: swap`; other text uses system fonts.
-
-The photographic newspaper was edited using the built-in ImageGen tool to carry the user's requested Firebird masthead and “CHANJS WINS FIREBIRD HACKATHON” headline. This is decorative scene artwork, not evidence establishing an award. The code-native fallback contains the same wording. The fly, proboscis, ink, orbit, fallback newspaper, and choreography are authored SVG/CSS/JavaScript. No second WebGL renderer is created. Preserved source PNGs are never requested by the loader.
+The fly-face mark remains `assets/brand/fly-eye.svg`. Typography is locally hosted `assets/fonts/space-grotesk-bold.ttf`, weight 700, with its OFL license. The font uses `font-display: swap`; supporting text uses system fonts. Image URLs derive from the loading script URL; the font URL is relative to the stylesheet. The build versions runtime assets to avoid old cached script/artwork. Preserved original PNGs are not requested by the loader.
 
 ## Validation — 27 September 2026
 
-`node --check loading.js` and `git diff --check` passed. Chrome fixture logs record visible progress, timeline phase, actual readiness, heavy-gate release, and hidden state. In the final parallel fixture run, fast, slow, and cached cases began the 100% strike at 3003ms, 3007ms, and 3008ms respectively. Their heavy-work gates released at 3768ms, 3773ms, and 3773ms. All finish resolutions occurred with actual readiness true and the overlay hidden.
+`node --check loading.js` and whitespace checks for the owned files pass. Chrome fixtures record visible percentage, timeline stage, real readiness, heavy-work release, and hidden state. Fast and cached runs both played the full two-second count. The slow case completed its opening and held at 100 while preparation continued. Skip and reduced motion released heavy work without releasing entry early. Failures, stale finish calls, retry, timeout, and failure during the welcome retain the independent readiness gate.
 
-| Case | Observed behavior |
-| --- | --- |
-| Fast preparation | Actual readiness at about 70ms did not accelerate the three-second counter or skip the scene. |
-| Slow preparation | Counter and strike finished normally; at 4.5s the intro stayed at 100, waiting honestly for preparation. |
-| Cached/returning visit | Even with the old seen marker present, the full count and swat played. |
-| Skip | Heavy gate released at 183ms; entry still waited for actual readiness at 1203ms. |
-| Reduced motion | Heavy gate released immediately; still welcome and hide followed readiness. |
-| Failure and stale finish | Error released only the heavy gate; finish remained pending until explicit reset and actual readiness. |
-| Retry button | Retry callback ran; successful readiness completed the original entry promise. |
-| Failure during reveal | Fade cancelled, stale finish ignored, and successful retry released both finish waiters only after hiding. |
-| Timeout | Waiting status appeared without changing the intro clock or inventing readiness. |
+Every observed finish resolution had actual readiness true and the overlay hidden. The welcome contains only the requested typography; it has no card or surrounding loader labels. Evidence lives in the deployment chat's `outputs/qa/intro-v6-state-results.json` and v6 screenshots. Review screenshots may pause a production animation at a chosen frame only in the external fixture; production has no such pause.
 
-Fixtures inject reduced-motion preference locally without changing operating-system settings. Visual evidence includes the final Firebird photograph, aligned impact, and desktop/mobile glass welcome. Screenshots that hold a welcome or impact do so only in the review harness; production has no such freeze. Evidence files are in the deployment chat's `outputs/qa/intro-v5-state-results.json` and v5 screenshots. Full-app startup timing is checked separately against the integrated build with heavy work deferred.
+The full built application was checked at 320 × 640. Sampling started about 25ms into the opening: 25%, 50%, 75%, and 100% appeared at 476ms, 976ms, 1475ms, and 1975ms relative to that sample start, matching the two-second linear timeline. Impact appeared at 2358ms, heavy work was allowed at 2534ms, the welcome began at 3209ms, and the overlay was hidden at 4043ms. Every visible sample held simulation time at `0.00 s`. Total observed time from opening was approximately 4.07 seconds, compared with about 5.79 seconds for the prior version. These are local QA observations, not a cross-device guarantee.
 
-The integrated built application was sampled on a cached reload at 320 × 640: 25% at 749ms, 50% at 1501ms, 75% at 2249ms, and 100% with the strike at 3000ms. Heavy work became allowed at 3811ms; the overlay hid after the welcome at 5789ms. Every visible sample retained simulation time `0.00 s`. These observations are saved in `outputs/qa/intro-v5-integrated-counter.json`. The complete welcome fits inside the 320px stage; the loader is exactly 320 × 640 with a 44px skip target. The updated Firebird photo has clean alpha edges and its contact anchor matches the fly center in the desktop proof. Temporary browser viewport overrides were reset and the fixture tab was closed.
+The fresh photographic headline and official Firebird mark were fully inside the 320px reading pose. Loader dimensions were exactly 320 × 640. At the welcome, header/footer/counter/caption all computed as hidden, with no focus outline or card. Local Noir query input still yielded Burgundy. Live mobile screenshots capture the real reading hold and the simulation appearing behind the type; separate review fixtures capture desktop/mobile typography. Browser viewport overrides were reset, temporary tabs closed, and the local fixture server stopped.

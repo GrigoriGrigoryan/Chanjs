@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-27",
+  "mode": "built-in image_gen edit, transparent_background=true",
+  "source": "assets/loading/source/newspaper-firebird-won-alpha.png",
+  "runtime_asset": "assets/loading/newspaper-hand.webp",
+  "references": [
+    "/Users/Bytepitch/Documents/Codex/2026-09-26/chanjs-vercel-deployment/work/Chanjs/assets/loading/newspaper-hand.webp",
+    "/Users/Bytepitch/Documents/Codex/2026-09-26/chanjs-vercel-deployment/work/firebird-wordmark-reference.png",
+    "/Users/Bytepitch/Documents/Codex/2026-09-26/chanjs-vercel-deployment/work/firebird-glyph-reference.png"
+  ],
+  "official_logo_sources": [
+    "https://www.firebird.ai/assets/logo-firebird-small.svg",
+    "https://www.firebird.ai/assets/glyph-gradient.svg"
+  ],
+  "encoding": "Sharp resize to1200×800 WebP quality90 alphaQuality100 effort6. No compositing or retouching.",
+  "prompt": "Use case: precise branded editorial image edit for a website animation. Edit target is image 1, the transparent cutout of a hand holding a newspaper. Images 2 and 3 are official Firebird logo references, supporting inserts only. Keep the natural hand anatomy, grip, sleeve-free forearm entering at the lower right, off-white newsprint, diagonal newspaper from upper left to lower right, and broadly the same full composition. Keep the paper's upper-left striking tip near 13% across and 15% down the overall image so the app's contact alignment remains correct. Make the upper newspaper face wider, a folded slightly flattened paper rather than an extremely narrow round tube, facing toward the viewer for immediate legibility. The FIRST and largest printed text at the very top of the outward-facing face must be 'CHANJS WON' in massive bold dark charcoal condensed newspaper lettering, then 'FIREBIRD' and 'HACKATHON' as two large clear lines immediately below. Do not put a FIREBIRD masthead above CHANJS WON. Exact headline: CHANJS WON FIREBIRD HACKATHON. Include the official angular Firebird glyph from image 3 on the upper newspaper face, in its vivid orange #F86130 to red gradient, and the official Firebird wordmark from image 2 smaller in black beside it or below the main headline. Preserve the logo's angular shape rather than inventing a bird. Add a bold warm orange printed highlight/rule or banner to make the winning announcement instantly noticeable. Give the headline at least the upper half of the exposed newspaper surface; tiny editorial columns belong below the headline and above the grip only. All letters should be bold and readable at mobile animation size, and the main headline should not curve away around the far side. Maintain a realistic photographic cutout, paper creases, convincing print perspective and existing lighting. No backdrop, no external shadow/glow, no extra objects, no additional fingers. Preserve genuine transparent alpha around all edges. Landscape 3:2 framing."
+}
