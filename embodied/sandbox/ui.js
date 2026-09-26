@@ -5,17 +5,17 @@ const body = document.body;
 const controls = $('controls');
 const brainDetails = $('brain-details');
 const help = $('help-dialog');
-const desktop = matchMedia('(min-width:1000px)');
+const desktop = matchMedia('(min-width:1100px)');
 const THEME_KEY = 'chanj-theme';
 const COACH_KEY = 'chanj-intro-seen-v2';
 let activeView = 'arena';
-let lastOpener = null;
+const dialogOpeners = new WeakMap();
 let coachTimer = 0;
 
 const explanations = {
   about: {
-    kicker: 'MEET CHANJ', title: 'A little body. A connected brain.',
-    content: '<p>Explore how signals in a modeled fruit-fly brain relate to movement in its world.</p><p class="help-fact"><strong>138,639 neurons.</strong> FlyWire connectivity, a NeuroMechFly body, and an interactive view of their modeled behavior.</p><p>Use <strong>Arena</strong> to follow the fly, <strong>Brain</strong> to explore activity, and <strong>Controls</strong> to change the conditions.</p><p><a href="https://github.com/K4ryan/Chanjs/blob/main/embodied/README.md" target="_blank" rel="noreferrer">Model, sources &amp; assumptions ↗</a></p><p class="legal-note">FlyWire data: noncommercial use. Base code © Nic Dunzelman, MIT. NeuroMechFly: Apache-2.0. Three.js: MIT.</p>'
+    kicker: 'MEET CHANJS', title: 'A little body. A connected brain.',
+    content: '<p>Explore how signals in a modeled fruit-fly brain relate to movement in its world.</p><p class="help-fact"><strong>138,639 neurons.</strong> FlyWire connectivity, a NeuroMechFly body, and an interactive view of their modeled behavior.</p><p>Use <strong>Arena</strong> to follow the fly and <strong>Brain</strong> to explore activity. On a computer the settings stay open. On a phone, tap <strong>Controls</strong> and drag the panel down to close it.</p><p><a href="https://github.com/K4ryan/Chanjs/blob/main/embodied/README.md" target="_blank" rel="noreferrer">Model, sources &amp; assumptions ↗</a></p><p class="legal-note">FlyWire data: noncommercial use. Base code © Nic Dunzelman, MIT. NeuroMechFly: Apache-2.0. Three.js: MIT.</p>'
   },
   arena: {
     kicker: '01 / THE BODY', title: 'Follow a small decision.',
@@ -31,7 +31,7 @@ const explanations = {
   },
   modulators: {
     kicker: 'CHANGE A SIGNAL', title: 'Try one change at a time.',
-    content: '<p><strong>Reward dopamine (PAM)</strong> and <strong>punishment dopamine (PPL1)</strong> change modeled input to approach/avoid populations.</p><p>At <strong>0</strong> the setting is natural. <strong>−1</strong> blocks release; <strong>+1</strong> drives the group. These are model interventions, not measured hormone concentrations.</p><p><strong>Octopamine</strong> changes walking speed through an assumed gain. Move a slider, then compare the movement and neural readouts.</p>'
+    content: '<p><strong>Food attraction · PAM</strong>: moving right strengthens the model’s approach signal by reducing its avoid-side input.</p><p><strong>Approach brake · PPL1</strong>: moving left releases this brake. Moving right can have a smaller effect because the baseline brake is already strong.</p><p>At <strong>0</strong> the setting is natural. <strong>−1</strong> blocks release; <strong>+1</strong> drives the group. These are model interventions, not measured hormone concentrations.</p><p><strong>Walking drive · octopamine</strong> changes the modeled walking drive through an assumed gain. This is different from playback speed, which only changes how quickly you watch.</p><p>The presets change food attraction while resetting the other conditions, so you can compare the same scene. They do not guarantee a route or outcome.</p>'
   },
   newspaper: {
     kicker: 'A PLAYFUL LAYER', title: 'Watch the newspaper.',
@@ -58,7 +58,7 @@ function normalizeIcons() {
   });
 }
 function setTheme(theme, updateUrl = true) {
-  if (!['orange', 'burgundy'].includes(theme)) theme = 'orange';
+  if (!['noir', 'burgundy'].includes(theme)) theme = 'noir';
   root.dataset.theme = theme;
   try { localStorage.setItem(THEME_KEY, theme); } catch {}
   if (updateUrl) {
@@ -67,7 +67,7 @@ function setTheme(theme, updateUrl = true) {
     history.replaceState(history.state, '', url);
   }
   document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme)));
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'burgundy' ? '#f2e4e6' : '#f3efe7');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'burgundy' ? '#170b13' : '#080809');
   normalizeIcons();
   window.dispatchEvent(new CustomEvent('chanj:themechange', { detail: { theme } }));
 }
@@ -82,7 +82,7 @@ function setView(view) {
 function showControlTab(tab) {
   if (!['behavior', 'arena', 'replays'].includes(tab)) tab = 'behavior';
   document.querySelectorAll('[data-control-tab]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.controlTab === tab)));
-  document.querySelectorAll('[data-control-panel]').forEach(panel => { panel.hidden = panel.dataset.controlPanel !== tab; });
+  document.querySelectorAll('[data-control-panel]').forEach(panel => { panel.hidden = !desktop.matches && panel.dataset.controlPanel !== tab; });
   controls.querySelector('.sheet-scroll').scrollTop = 0;
 }
 function showBrainTab(tab) {
@@ -94,22 +94,47 @@ function showBrainTab(tab) {
 function openDialog(dialog, opener) {
   hideCoach();
   if (!dialog.open) {
-    lastOpener = opener || document.activeElement;
+    dialogOpeners.set(dialog, opener || document.activeElement);
     dialog.showModal();
   }
 }
 function closeDialog(dialog) {
+  if (dialog === controls && desktop.matches) return;
   if (dialog?.open) dialog.close();
 }
 function openControls(tab, opener) {
   showControlTab(tab);
+  if (desktop.matches) {
+    controls.open = true;
+    const section = controls.querySelector(`[data-control-panel="${tab}"]`);
+    if (section) controls.querySelector('.sheet-scroll').scrollTop += section.getBoundingClientRect().top - controls.querySelector('.sheet-scroll').getBoundingClientRect().top;
+    return;
+  }
   openDialog(controls, opener);
 }
+function syncControlsLayout() {
+  const wasOpen = controls.open;
+  if (wasOpen) controls.close(); // removes an old mobile modal from the top layer
+  controls.removeAttribute('style');
+  controls.setAttribute('role', desktop.matches ? 'complementary' : 'dialog');
+  if (desktop.matches) controls.open = true; // a nonmodal panel; never steals loader focus
+  showControlTab(controls.querySelector('[data-control-tab][aria-pressed="true"]')?.dataset.controlTab || 'behavior');
+}
+
 function openHelp(key, opener) {
   const explanation = explanations[key] || explanations.about;
   $('help-kicker').textContent = explanation.kicker;
   $('help-title').textContent = explanation.title;
   $('help-content').innerHTML = explanation.content;
+  if (key === 'about') {
+    const replay = document.createElement('button');
+    replay.className = 'help-row';
+    replay.textContent = 'Replay opening · restarts this view';
+    replay.addEventListener('click', () => {
+      const url = new URL(location.href); url.searchParams.set('intro', '1'); location.href = url.href;
+    });
+    $('help-content').append(replay);
+  }
   openDialog(help, opener);
 }
 function hideCoach() {
@@ -119,7 +144,7 @@ function hideCoach() {
 function showCoach() {
   let seen = false;
   try { seen = localStorage.getItem(COACH_KEY) === '1'; } catch {}
-  if (seen || document.querySelector('dialog[open]')) return;
+  if (seen || [...document.querySelectorAll('dialog[open]')].some(dialog => dialog !== controls || !desktop.matches)) return;
   try { localStorage.setItem(COACH_KEY, '1'); } catch {}
   $('coachmark').hidden = false;
   coachTimer = setTimeout(hideCoach, 7000);
@@ -140,10 +165,81 @@ for (const dialog of document.querySelectorAll('dialog')) {
     if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeDialog(dialog);
   });
   dialog.addEventListener('close', () => {
-    if (lastOpener?.isConnected && !document.querySelector('dialog[open]')) lastOpener.focus({ preventScroll: true });
+    const opener = dialogOpeners.get(dialog);
+    if (opener?.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });
   });
 }
 $('dismiss-coach').addEventListener('click', hideCoach);
+
+// Pull the grip/header, or pull down from the top of the scroll area.
+// Range sliders and buttons keep their own gestures; content still scrolls normally.
+for (const sheet of document.querySelectorAll('.sheet')) {
+  let gesture = null, settleTimer = 0;
+  const canDrag = () => !desktop.matches && sheet.open;
+  const interactive = target => target.closest('button,input,select,a,summary');
+  const start = (x, y, kind) => {
+    clearTimeout(settleTimer);
+    gesture = { x, y, dy: 0, at: performance.now(), kind, active: kind === 'header' };
+  };
+  const move = (x, y) => {
+    if (!gesture) return false;
+    const dy = y - gesture.y, dx = x - gesture.x;
+    if (!gesture.active) {
+      if (dy < -8 || Math.abs(dx) > Math.abs(dy) + 8) { gesture = null; return false; }
+      if (dy > 8 && dy > Math.abs(dx)) gesture.active = true;
+    }
+    if (!gesture.active) return false;
+    gesture.dy = Math.max(0, dy);
+    sheet.dataset.dragging = 'true';
+    sheet.style.animation = 'none';
+    sheet.style.transition = 'none';
+    sheet.style.transform = `translateY(${gesture.dy}px)`;
+    return true;
+  };
+  const clear = () => {
+    gesture = null;
+    delete sheet.dataset.dragging;
+    sheet.style.removeProperty('transform');
+    sheet.style.removeProperty('transition');
+    sheet.style.removeProperty('animation');
+  };
+  const end = (cancelled = false) => {
+    if (!gesture) return;
+    const {dy, at, active} = gesture;
+    gesture = null;
+    if (!active) return;
+    const fast = dy > 36 && dy / Math.max(1, performance.now() - at) > .55;
+    const dismiss = !cancelled && (dy > Math.min(110, sheet.clientHeight * .22) || fast);
+    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
+    sheet.style.transition = `transform ${duration}ms ease-out`;
+    sheet.style.transform = dismiss ? `translateY(${sheet.clientHeight + 40}px)` : 'translateY(0)';
+    settleTimer = setTimeout(() => { if (dismiss) closeDialog(sheet); clear(); }, duration);
+  };
+  for (const handle of sheet.querySelectorAll('.sheet-grip,.sheet-header')) {
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', event => {
+      if (!canDrag() || event.button !== 0 || interactive(event.target)) return;
+      start(event.clientX, event.clientY, 'header');
+      handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointermove', event => { if (gesture?.kind === 'header') move(event.clientX, event.clientY); });
+    handle.addEventListener('pointerup', () => { if (gesture?.kind === 'header') end(); });
+    handle.addEventListener('pointercancel', () => { if (gesture?.kind === 'header') end(true); });
+  }
+  const scroll = sheet.querySelector('.sheet-scroll');
+  scroll?.addEventListener('touchstart', event => {
+    if (!canDrag() || event.touches.length !== 1 || scroll.scrollTop > 0 || interactive(event.target)) return;
+    const touch = event.touches[0]; start(touch.clientX, touch.clientY, 'content');
+  }, {passive: true});
+  scroll?.addEventListener('touchmove', event => {
+    if (gesture?.kind !== 'content' || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    if (move(touch.clientX, touch.clientY)) event.preventDefault();
+  }, {passive: false});
+  scroll?.addEventListener('touchend', () => { if (gesture?.kind === 'content') end(); });
+  scroll?.addEventListener('touchcancel', () => { if (gesture?.kind === 'content') end(true); });
+  sheet.addEventListener('close', () => { clearTimeout(settleTimer); clear(); });
+}
 
 // Observe only presentation state written by app.js; never duplicate simulation logic.
 function syncPlayback() {
@@ -155,12 +251,13 @@ new MutationObserver(syncPlayback).observe($('playback'), { attributes: true, at
 for (const id of ['replay-baseline', 'replay-modulated']) {
   $(id).addEventListener('click', () => { hideCoach(); });
 }
-desktop.addEventListener('change', () => setView(activeView));
+desktop.addEventListener('change', () => { setView(activeView); syncControlsLayout(); });
 document.addEventListener('chanj:ready', () => { syncPlayback(); showCoach(); });
 window.addEventListener('popstate', () => {
   const theme = new URL(location.href).searchParams.get('theme');
   if (theme) setTheme(theme, false);
 });
-setTheme(root.dataset.theme, false);
+setTheme(root.dataset.theme, new URLSearchParams(location.search).get('theme') === 'orange');
 setView('arena');
+syncControlsLayout();
 syncPlayback();

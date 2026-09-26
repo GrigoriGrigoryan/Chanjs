@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const {createHash} = require('node:crypto');
 
 // The public presentation is the embodied sandbox. Preserve the feeding
 // experiment in source, but do not upload its 61 MB network or frontend.
@@ -28,6 +29,7 @@ function staticFiles(root) {
     ...filesUnder(root, 'docs', ['.md', '.jpg', '.png']),
     ...filesUnder(root, 'assets/loading', ['.webp', '.avif', '.png', '.jpg', '.jpeg', '.svg'])
       .filter(file => !file.startsWith(path.join('assets', 'loading', 'source') + path.sep)),
+    ...filesUnder(root, 'assets/brand', ['.svg']),
     ...filesUnder(root, 'embodied/sandbox', ['.html', '.js', '.mjs', '.css', '.json', '.bin'])];
   for (const id of ['2ea7f28129', '19be51902d', '313e0f37bc']) {
     for (const name of ['run.json', 'poses.bin', 'spikes_idx.bin', 'spikes_cnt.bin']) files.push(`embodied/results/sandbox/${id}/${name}`);
@@ -67,14 +69,40 @@ function vendorThree(root, output) {
   return seen.size;
 }
 
+function assetVersion(root, files) {
+  const critical = files.filter(file => /\.(js|mjs|css|svg)$/.test(file) &&
+    (file.startsWith('embodied/sandbox/') || file.startsWith('assets/brand/') || OPTIONAL_FILES.includes(file))).sort();
+  const hash = createHash('sha256');
+  for (const file of critical) hash.update(file).update('\0').update(fs.readFileSync(path.join(root, file))).update('\0');
+  return hash.digest('hex').slice(0, 12);
+}
+
+function versionReferences(content, references, version) {
+  for (const reference of references) for (const quote of ['"', "'"]) {
+    content = content.replaceAll(`${quote}${reference}${quote}`, `${quote}${reference}?v=${version}${quote}`);
+  }
+  return content;
+}
+
 function build(root, output) {
   if (fs.existsSync(output) && fs.readdirSync(output).length) throw new Error('Build output must be empty');
   fs.mkdirSync(output, {recursive: true});
   const files = staticFiles(root);
   for (const file of files) copy(root, file, output);
   const vendorCount = vendorThree(root, output);
+  const version = assetVersion(root, files);
+  const brandRefs = files.filter(file => file.startsWith('assets/brand/'))
+    .flatMap(file => [file, `../../${file}`]);
+  // Brand marks also appear in slider CSS and the loader's JavaScript.
+  for (const file of files.filter(file => /\.(css|js)$/.test(file))) {
+    const target = path.join(output, file);
+    const source = fs.readFileSync(target, 'utf8');
+    const updated = versionReferences(source, [...brandRefs, './replay.mjs'], version);
+    if (source !== updated) fs.writeFileSync(target, updated);
+  }
   const sandboxPath = path.join(output, 'embodied/sandbox/index.html');
   let html = fs.readFileSync(sandboxPath, 'utf8');
+  html = versionReferences(html, ['mobile.css', 'ui.js', './app.js', '../../loading.js', '../../loading.css', ...brandRefs], version);
   html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/three@0\.170\.0\//g, '../../vendor/three/');
   html = html.replace(/<link\b[^>]*href=["']https:\/\/fonts\.googleapis\.com[^>]*>\s*/g, '');
   html = html.replace('</head>', '<script>window.CHANJ_STATIC_HOSTING=true;</script>\n</head>');
@@ -90,7 +118,7 @@ function build(root, output) {
   walk(output);
   console.log(`Static presentation: ${files.length} project files + root sandbox entry + ${vendorCount} three modules; ${(bytes / 1e6).toFixed(2)} MB.`);
   console.log('Instant preview and recorded runs enabled. Full Python/MuJoCo jobs are not deployed.');
-  return {files, bytes, vendorCount};
+  return {files, bytes, vendorCount, version};
 }
 
 if (require.main === module) {
@@ -98,4 +126,4 @@ if (require.main === module) {
   fs.rmSync(output, {recursive: true, force: true});
   build(root, output);
 }
-module.exports = {build, staticFiles, vendorThree};
+module.exports = {build, staticFiles, vendorThree, assetVersion};

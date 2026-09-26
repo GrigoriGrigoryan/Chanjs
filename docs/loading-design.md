@@ -1,60 +1,80 @@
-# Escape the newspaper
+# CHANJS — a short encounter
 
-The Chanjs introduction is an original editorial scene: oversized CHANJ lettering, a tactile hand holding a rolled newspaper, and a small illustrated fly that escapes the sweep and passes behind the letters. It uses the selected orange (`#FF632D`) or burgundy (`#751B3B`) theme. The small caption reads “Illustrated introduction.” This is decorative storytelling, not a neural visualization, scientific recording, or model result.
+The first visit opens with one finite scene: a fly enters, a hand sweeps a rolled newspaper across the oversized CHANJS lettering, and the fly settles into a small, flattened, stylized mark. The impact is quiet, with no gore. The scene then reveals the application. The text-free compound-eye brand mark is shared with the application. Themes are Noir (default, near-black with deep crimson) and Burgundy; orange is no longer a theme.
 
-The composition appears immediately through HTML, CSS, and an inline SVG fly. A code-native rolled-paper silhouette remains available while the optional photographic cutout loads, or if it fails. The newspaper sweep, letter reactions, fly route, and wingbeat use CSS animation; there is no second WebGL renderer. Animations never represent loading progress.
+This is an illustrated introduction, not a neural visualization, scientific recording, or model result. The caption says “Illustrated introduction.” The scene contains no progress percentage or estimated completion animation.
 
-## Readiness and API
+## Timing and readiness contract
 
-Load `loading.css` and the classic `loading.js` script before starting the experiment. The script derives the image URL from its own URL, so both the root entry and `/embodied/sandbox/` resolve the same artwork, including when the entry uses a `<base>` element.
+Resource loading and the introduction run in parallel. The normal first-visit scene lasts 2,800ms, then the overlay fades for 400ms after real assets are ready. If loading finishes early, it waits for the scene. If loading takes longer, the final impact frame stays still until readiness. All decorative animations are finite and are removed after the scene settles.
+
+**`ChanjLoader.finish()` now returns `Promise<void>`.** Call it only after actual application readiness, and await it before starting the simulation clock or autoplay. It resolves after the overlay and minimized status button are actually hidden, including the reveal transition. A timeout fallback handles browsers that suppress `transitionend`; that fallback explicitly hides the DOM before resolving.
 
 ```js
 ChanjLoader.show({
   title: 'A tiny fly. A whole world.',
-  detail: 'Loading fly geometry and measured decision tables…',
+  detail: 'Loading geometry and measured decision tables…',
   timeoutMs: 45000
 });
 ChanjLoader.update('Preparing the measured decision table…');
-// Called by actual application readiness:
-ChanjLoader.finish();
-// Called by the application error handler:
-ChanjLoader.fail('The experiment could not load. Please retry.');
+await loadActualResources();
+await ChanjLoader.finish();
+// Start/reset the application clock and autoplay here.
 ```
 
-The API remains `show`, `update`, `finish`, `fail`, and `hide`. `show` accepts an optional `retry` function; `fail(message, retry)` accepts the same callback. Retry reloads the current URL if no callback is provided. Call `fail` after legacy code that disables all page buttons so the introduction controls remain usable.
+`show`, `update`, `fail`, and `hide` keep their existing call signatures. `show` accepts an optional `retry` callback, and `fail(message, retry)` accepts the same callback. Retry reloads the current URL if no callback is supplied. A callback must call `finish()` after its own successful readiness work; resolving the retry callback alone does not imply that resources are ready.
 
-`finish()` removes the overlay and its minimized status button immediately and stops the timer. There is no minimum viewing duration or delay waiting for the artwork or the animation. When initialization is fast, the introduction may only appear briefly.
+The elapsed clock measures time to actual readiness or failure and stops at that event. During a fast first load, the status can truthfully say “READY — Your fly is ready” while the short introduction completes. Its choreography never claims to measure loading.
 
-Elapsed time uses `performance.now()`. After the configured timeout the overlay says that loading is taking longer and offers Retry, while still accepting a later successful finish. An explicit failure stops the timer and pauses the decorative motion. Hide and Escape leave initialization running and expose a compact status button for reopening it.
+## First visit, skip, and motion preferences
 
-## Theme and accessibility
+- The versioned localStorage key is `chanjs-intro-v3`, value `seen`. It is saved when the scene finishes or the user skips it. If storage is unavailable, an in-memory marker handles subsequent cycles in the current page.
+- Returning visits use a simpler, static loading view and reveal as soon as real assets are ready.
+- `?intro=1` explicitly replays the first-visit scene for review, regardless of the stored marker.
+- “Skip intro,” Escape, and `hide()` end the scene and dismiss the overlay immediately. If assets are still loading, a compact status button remains. Skipping never makes assets ready and never resolves a pending `finish()` promise early.
+- Reduced motion uses a still impact composition for at most 180ms and an immediate reveal once resources are ready. There is no wing motion, traveling hand, letter movement, or shake. The loader also reacts if the motion preference changes while it is open.
 
-The loader reads `document.documentElement.dataset.theme`, then `?theme=orange|burgundy`, then the `chanj-theme` localStorage value. It follows root theme attribute changes and `chanj:themechange` events. It does not overwrite the user's theme setting.
+The dialog has a polite status region, focus handling, controls at least 44px high, and a non-announcing elapsed timer. All decorative scene content is hidden from assistive technology. Small screens use a tighter crop and allow vertical scrolling if longer errors require extra space.
 
-The overlay is a labeled dialog with a polite status region and a timer that does not announce every tick. All decorative scene content is hidden from assistive technology. Focus cycles through the visible controls. Escape hides the overlay. Buttons are at least 44px high. `prefers-reduced-motion: reduce` turns off all animation and transitions and presents a still composition. Small screens use a tighter scene crop, and the overlay permits vertical scrolling if an error requires extra room.
+## Failures and retries
 
-## Artwork provenance
+A resource failure cancels any pending reveal, clears readiness, pauses the scene, and shows Retry. Existing completion waiters remain pending. Retry preserves that same promise and uses a simple loading view; it does not replay the cinematic. Only a later successful `finish()` releases those waiters. An error during the 400ms fade cancels the fade and prevents an early resolution.
 
-The hand/newspaper cutout was generated for this implementation using the **built-in ImageGen tool**, following the ImageGen skill. No external photography, stock image, brand, newspaper masthead, or reference artwork was reused. The print is abstract texture and contains no intended readable text or science claims.
+The configurable loading timeout reports that loading is taking longer, without falsely declaring failure. It keeps accepting a later successful readiness event. A missing newspaper image falls back to a code-native silhouette and does not block loading or the scene.
 
-- Runtime asset: `assets/loading/newspaper-hand.webp` — 1200 × 800, transparent alpha, 77,096 bytes.
-- Preserved generated source: `assets/loading/source/newspaper-hand-alpha.png` — 1536 × 1024, alpha PNG, copied unchanged from the selected ImageGen result.
-- Complete generation prompt, refinement prompt, tool mode, original source path, and processing record: `assets/loading/source/generation-provenance.json`.
+## Asset and theme integration
 
-The initial prompt requested a single adult hand and forearm holding a rolled newspaper, diagonally composed for a sweep from the lower right, with tactile studio lighting, abstract newsprint, and a transparent background. A subsequent ImageGen edit requested removing any surrounding haze while preserving the hand, paper, anatomy, gesture, and colors. The selected source was inspected and confirmed to have an alpha channel. Transparent pixels retain color values in the PNG, but those values are not visible when alpha is composited correctly.
+Load the classic `loading.js` script and `loading.css` before experiment initialization. The script derives its asset URLs from its own URL, so root and nested entry points, including an HTML `<base>`, use the same assets.
 
-Sharp only resized the selected image and encoded WebP (quality 82, alpha quality 100). It did not retouch, composite, or threshold the alpha. The original PNG remains alongside its provenance. The fly, dotted route, fallback newspaper, and typography are newly authored inline SVG/CSS/HTML.
+Themes are read from `document.documentElement.dataset.theme`, then `?theme=noir|burgundy`, then localStorage `chanj-theme`. The loader follows root theme changes and `chanj:themechange` events without overwriting the preference.
+
+- Runtime photograph: `assets/loading/newspaper-hand.webp` — 1200 × 800, alpha, 77,096 bytes.
+- Preserved generated source: `assets/loading/source/newspaper-hand-alpha.png` — 1536 × 1024 alpha PNG, unchanged from the selected ImageGen result.
+- Exact prompts, built-in tool mode, original source path, and processing record: `assets/loading/source/generation-provenance.json`.
+- Shared authored compound-eye mark: `assets/brand/fly-eye.svg`.
+
+The hand and newspaper were generated for the previous introduction using the built-in ImageGen tool and are reused unchanged here. The print is abstract texture without intended readable words, logos, or scientific claims. Sharp resized and encoded the runtime WebP; it did not retouch, composite, or threshold the alpha. The fly, fallback newspaper, route, letters, and choreography are code-native. No second WebGL renderer is created.
 
 ## Validation — 27 September 2026
 
-- `node --check loading.js` passed.
-- Inspected both themes in Chrome at 1280 × 720 and 320 × 640 using a local display fixture with current source.
-- At 320 × 640, document and loader scroll widths were 320px, loader height was 640px, and the hide button was 44px high. The actual loading status and elapsed clock remained visible.
-- Verified that the generated WebP loaded and `data-art` became `ready`; transparent edges composited cleanly on both backgrounds.
-- Exercised Hide, reopening from the status button, Escape, completion, explicit failure, successful retry, and the still-waiting timeout state. Completion immediately removed both the dialog and minimized status button. Browser warning/error capture was empty.
-- Reviewed reduced-motion CSS and missing-image fallback in source; the OS preference was not changed and an image-fetch failure was not injected during this fixture check.
-- Saved four viewport screenshots under the deployment chat's `outputs/qa/`: `loading-orange-desktop.png`, `loading-orange-mobile.png`, `loading-burgundy-desktop.png`, and `loading-burgundy-mobile.png`.
+`node --check loading.js` passed. Chrome fixture scenarios recorded real timestamps and DOM state; every resolved promise was checked to have both actual readiness and an already-hidden overlay.
 
-The fixture deliberately stays visible for design review. Its elapsed clock records fixture viewing time, not production load performance. No production delay was added for screenshots. Temporary browser viewport overrides were reset afterward.
+| Scenario | Observed behavior |
+| --- | --- |
+| Fast assets | Assets ready at 90ms; promise resolved after hidden at 3,258ms. |
+| Slow assets | Scene settled while still loading at 3,024ms; assets ready at 4,222ms; revealed at 4,650ms. |
+| Skip before readiness | Hidden at 173ms, still unready at 677ms; resolved only at readiness, 1,222ms. |
+| Reduced motion | Still composition; assets ready at 71ms; resolved at 200ms. |
+| Returning visit | Static mode; readiness and hidden resolution both at 55ms. |
+| Error after early readiness | Failure revoked readiness; skipping did not resolve it; successful readiness later released both waiters at 1,223ms. |
+| Retry button | Existing waiter survived failure; clicking Retry used static loading; both waiters resolved after the callback signaled actual readiness. |
+| Error during reveal | Failure at 2,980ms cancelled the fade; overlay remained visible and unready at 3,476ms; later readiness revealed at 4,659ms. |
+| Loading timeout | Entered the still-loading state without failure; later readiness completed normally. |
 
-The unminified loader code totals 25,641 bytes (12,063 JavaScript + 13,578 CSS), approximately 7,916 bytes when separately gzipped. With the 77,096-byte WebP, the runtime addition is approximately 85KB transferred before protocol overhead. The preserved PNG source is not requested by the loader.
+Reduced-motion logic was exercised by a fixture-only `matchMedia` override that activated the production `data-motion="reduced"` path; no OS setting was changed. In addition, the CSS contains the native media-query fallback.
+
+The current Noir and Burgundy scenes were visually inspected at 1280 × 720, and Burgundy at 320 × 640. At 320px, the viewport and loader scroll width were both 320px; loader height was 640px, the skip control was 44px high, and the full CHANJS wordmark fit. After settling, computed animation names in the scene were all `none`. Both the generated hand and shared brand image loaded. Console warning/error capture was empty. Temporary browser viewport overrides were reset.
+
+Evidence is saved in the deployment chat's `outputs/qa/intro-v3-state-results.json` and `loading-noir-v3-desktop.png`, `loading-burgundy-v3-desktop.png`, and `loading-burgundy-v3-mobile.png`. These screenshots show a local fixture held in the final impact frame; their clocks are fixture viewing time, not production load benchmarks.
+
+Loader JavaScript and CSS total 32,018 unminified bytes, approximately 9,420 bytes when separately gzipped. The reused 77KB WebP and small shared SVG are the only additional images requested. The preserved source PNG is not requested by the loader.

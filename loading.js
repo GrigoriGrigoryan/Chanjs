@@ -1,30 +1,47 @@
-/* Original illustrated introduction. Decorative motion never reports load progress. */
+/* CHANJS first-visit introduction; resource readiness and cinema stay separate. */
 (function () {
   'use strict';
   if (window.ChanjLoader) return;
 
   const scriptUrl = document.currentScript && document.currentScript.src;
-  const artUrl = new URL('assets/loading/newspaper-hand.webp', scriptUrl || new URL('loading.js', location.href)).href;
+  const assetBase = scriptUrl || new URL('loading.js', location.href);
+  const artUrl = new URL('assets/loading/newspaper-hand.webp', assetBase).href;
+  const markUrl = new URL('assets/brand/fly-eye.svg', assetBase).href;
+  const SEEN_KEY = 'chanjs-intro-v3';
+  const INTRO_MS = 2800, REVEAL_MS = 400, REDUCED_MS = 180;
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   let root, dock, title, detail, phase, elapsed, dockTime, retryButton;
-  let active = false, visible = false, startedAt = 0, tick = 0, timeout = 0;
-  let returnFocus = null, retryAction = null, pending = null, pendingFailure = null;
-  const defaults = {
-    title: 'A tiny fly. A whole world.',
-    detail: 'Preparing the experiment…',
-    timeoutMs: 45000
-  };
+  let cycle = null, visible = false, pageSeen = false, waitingForBody = false;
+  let pendingOptions = null, returnFocus = null;
+  const defaults = { title: 'A tiny fly. A whole world.', detail: 'Preparing the experiment…', timeoutMs: 45000 };
 
   function currentTheme() {
     const selected = document.documentElement.dataset.theme;
-    if (selected === 'orange' || selected === 'burgundy') return selected;
+    if (selected === 'noir' || selected === 'burgundy') return selected;
     const query = new URLSearchParams(location.search).get('theme');
-    if (query === 'orange' || query === 'burgundy') return query;
+    if (query === 'noir' || query === 'burgundy') return query;
     try { if (localStorage.getItem('chanj-theme') === 'burgundy') return 'burgundy'; } catch (_) {}
-    return 'orange';
+    return 'noir';
   }
   function syncTheme() {
     if (root) root.dataset.theme = currentTheme();
     if (dock) dock.dataset.theme = currentTheme();
+  }
+  function hasSeenIntro() {
+    if (new URLSearchParams(location.search).get('intro') === '1') return false;
+    try { return pageSeen || localStorage.getItem(SEEN_KEY) === 'seen'; } catch (_) { return pageSeen; }
+  }
+  function rememberIntro() {
+    pageSeen = true;
+    try { localStorage.setItem(SEEN_KEY, 'seen'); } catch (_) {}
+  }
+  function makeCycle(settings) {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { ready: false, failed: false, ended: false, mounted: false, introDone: false,
+      skipped: false, exiting: false, reduced: motionPreference.matches, returning: hasSeenIntro(),
+      startedAt: performance.now(), readyAt: null, retry: typeof settings.retry === 'function' ? settings.retry : null,
+      tick: 0, timeout: 0, introTimer: 0, exitTimer: 0, exitListener: null, promise, resolve };
   }
   function flyingFly() {
     return `<svg viewBox="0 0 180 150" aria-hidden="true" focusable="false" fill="none">
@@ -51,7 +68,6 @@
       <path d="M525 260h100m-100 15h100m-100 15h100m-100 15h100m-100 40h100m-100 15h100m-100 15h100m-100 15h100m-100 40h100m-100 15h100m-100 15h100m-100 15h100" stroke="#655e4e" stroke-width="5"/>
       </g></svg>`;
   }
-
   function mount() {
     if (root) return;
     root = document.createElement('section');
@@ -60,16 +76,17 @@
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-labelledby', 'cl-title');
-    root.innerHTML = `<header class="cl-top"><span class="cl-brand"><i aria-hidden="true"></i>CHANJ<span class="cl-brand-slash">/</span><span class="cl-atlas">A FLY'S WORLD</span></span><button type="button" class="cl-hide">Hide intro <span aria-hidden="true">↗</span></button></header>
+    root.innerHTML = `<header class="cl-top"><span class="cl-brand"><img class="cl-brand-mark" alt="" width="26" height="26">CHANJS<span class="cl-brand-slash">/</span><span class="cl-atlas">A FLY'S WORLD</span></span><button type="button" class="cl-hide">Skip intro <span aria-hidden="true">↗</span></button></header>
       <div class="cl-stage" aria-hidden="true">
-        <div class="cl-stage-copy"><span class="cl-index">01 / AN EVERYDAY ESCAPE</span><p>Small brain.<br><em>Big instinct.</em></p></div>
-        <span class="cl-side-note">STAY CURIOUS. MOVE QUICKLY.</span>
-        <div class="cl-wordmark"><span>C</span><span>H</span><span>A</span><span>N</span><span>J</span></div>
+        <img class="cl-return-mark" alt="" width="128" height="128">
+        <div class="cl-stage-copy"><span class="cl-index">01 / A MOMENT IN A FLY’S WORLD</span><p>Small brain.<br><em>Big world.</em></p></div>
+        <span class="cl-side-note">A WORLD IN EVERY CONNECTION.</span>
+        <div class="cl-wordmark"><span>C</span><span>H</span><span>A</span><span>N</span><span>J</span><span>S</span></div>
         <svg class="cl-flightline" viewBox="0 0 1000 500" preserveAspectRatio="none"><path d="M-50 350C120 260 280 435 410 280S650 30 740 180 1040 260 1100 50"/></svg>
         <div class="cl-fly">${flyingFly()}</div>
-        <div class="cl-swat">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="low"></div>
+        <div class="cl-swat">${paperFallback()}<img class="cl-hand" alt="" width="1200" height="800" decoding="async" fetchpriority="high"></div>
         <span class="cl-impact cl-impact-one"></span><span class="cl-impact cl-impact-two"></span><span class="cl-impact cl-impact-three"></span>
-        <span class="cl-escape-note">TOO QUICK.</span>
+        <span class="cl-escape-note">A SMALL INTERRUPTION.</span>
         <span class="cl-illustration">Illustrated introduction</span>
       </div>
       <footer class="cl-bottom"><div class="cl-copy"><h2 id="cl-title"></h2><div class="cl-status"><span class="cl-status-mark" aria-hidden="true"></span><div><p class="cl-phase">PREPARING THE WORLD</p><p class="cl-detail" role="status" aria-live="polite" aria-atomic="true"></p></div></div></div><div class="cl-actions"><button type="button" class="cl-retry" hidden>Retry loading <span aria-hidden="true">↗</span></button></div><div class="cl-time"><span>ELAPSED</span><output role="timer" aria-live="off">00:00</output></div></footer>`;
@@ -88,6 +105,7 @@
     hand.addEventListener('load', () => { root.dataset.art = 'ready'; }, { once: true });
     hand.addEventListener('error', () => { root.dataset.art = 'fallback'; }, { once: true });
     hand.src = artUrl;
+    root.querySelector('.cl-brand-mark').src = root.querySelector('.cl-return-mark').src = markUrl;
     title = root.querySelector('#cl-title');
     detail = root.querySelector('.cl-detail');
     phase = root.querySelector('.cl-phase');
@@ -97,11 +115,9 @@
     root.querySelector('.cl-hide').addEventListener('click', hide);
     dock.addEventListener('click', reveal);
     retryButton.addEventListener('click', () => {
-      if (!retryAction) { window.location.reload(); return; }
-      const retry = retryAction;
-      const text = title.textContent;
-      stopTimers(); active = false;
-      show({ title: text, detail: 'Trying again…', retry });
+      if (!cycle || !cycle.retry) { window.location.reload(); return; }
+      const retry = cycle.retry;
+      resetForRetry(cycle);
       try { Promise.resolve(retry()).catch(error => fail(error.message || 'Loading failed.', retry)); }
       catch (error) { fail(error.message || 'Loading failed.', retry); }
     });
@@ -115,102 +131,193 @@
     });
   }
 
-  function formatTime() {
-    const seconds = Math.max(0, Math.floor((performance.now() - startedAt) / 1000));
+  function formatTime(c) {
+    const end = c.readyAt === null ? performance.now() : c.readyAt;
+    const seconds = Math.max(0, Math.floor((end - c.startedAt) / 1000));
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
   function updateTime() {
-    if (!root) return;
-    elapsed.textContent = dockTime.textContent = formatTime();
+    if (!root || !cycle) return;
+    elapsed.textContent = dockTime.textContent = formatTime(cycle);
   }
-  function stopTimers() { clearInterval(tick); clearTimeout(timeout); tick = timeout = 0; }
+  function clearLoadTimers(c) {
+    clearInterval(c.tick); clearTimeout(c.timeout); c.tick = c.timeout = 0;
+  }
+  function cancelExit(c) {
+    clearTimeout(c.exitTimer); c.exitTimer = 0;
+    if (root && c.exitListener) root.removeEventListener('transitionend', c.exitListener);
+    c.exitListener = null; c.exiting = false;
+    if (root) delete root.dataset.exiting;
+  }
   function restoreFocus() {
     if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus({ preventScroll: true });
   }
   function reveal() {
-    if (!active || !root) return;
+    if (!cycle || cycle.ended || !root) return;
     visible = true;
-    root.hidden = false;
-    dock.hidden = true;
+    root.hidden = false; dock.hidden = true;
     document.documentElement.classList.add('chanj-loading-lock');
     root.querySelector('.cl-hide').focus({ preventScroll: true });
   }
+  function endCinema(c, skipped) {
+    clearTimeout(c.introTimer); c.introTimer = 0;
+    c.introDone = true;
+    if (skipped) c.skipped = true;
+    rememberIntro();
+    if (root) root.dataset.cinema = 'settled';
+  }
+  function complete(c) {
+    if (cycle !== c || c.ended || !c.ready || c.failed) return;
+    const hadFocus = visible && root && root.contains(document.activeElement);
+    clearLoadTimers(c); clearTimeout(c.introTimer); cancelExit(c);
+    visible = false; c.ended = true;
+    if (root) root.hidden = dock.hidden = true;
+    document.documentElement.classList.remove('chanj-loading-lock');
+    if (hadFocus) restoreFocus();
+    // Resolve after the actual DOM hide, never just when resource loading ends.
+    c.resolve();
+  }
+  function maybeComplete(c) {
+    if (cycle !== c || c.ended || c.failed || !c.ready || !c.introDone || !c.mounted || c.exiting) return;
+    if (!visible || c.reduced || c.returning || c.skipped) { complete(c); return; }
+    c.exiting = true;
+    root.dataset.exiting = 'true';
+    c.exitListener = event => {
+      if (event.target === root && event.propertyName === 'opacity') complete(c);
+    };
+    root.addEventListener('transitionend', c.exitListener);
+    // If transitions are disabled or the browser suppresses transitionend, hide
+    // explicitly before resolving. A late asset error can cancel this fallback.
+    c.exitTimer = window.setTimeout(() => complete(c), REVEAL_MS + 80);
+  }
   function hide() {
-    if (!root) return;
+    const c = cycle;
+    if (!c || c.ended) return;
+    endCinema(c, true);
+    cancelExit(c);
     visible = false;
-    root.hidden = true;
-    dock.hidden = !active;
+    if (root) { root.hidden = true; dock.hidden = false; }
     document.documentElement.classList.remove('chanj-loading-lock');
     restoreFocus();
+    // Skip dismisses cinema, not resource loading. The dock persists until ready.
+    maybeComplete(c);
+  }
+  function armLoading(c, timeoutMs) {
+    clearLoadTimers(c);
+    c.tick = window.setInterval(updateTime, 1000);
+    const wait = Number(timeoutMs);
+    if (wait > 0 && Number.isFinite(wait)) c.timeout = window.setTimeout(() => {
+      if (cycle !== c || c.ended || c.ready || c.failed) return;
+      root.dataset.state = 'slow';
+      phase.textContent = 'STILL LOADING';
+      detail.textContent = 'This is taking longer than expected. You can keep waiting or retry.';
+      retryButton.hidden = false;
+      dock.querySelector('.cl-dock-text').textContent = 'Loading is taking longer';
+    }, wait);
+  }
+  function startMountedCycle(c, settings) {
+    mount(); syncTheme();
+    c.mounted = true;
+    if (typeof settings.retry === 'function') c.retry = settings.retry;
+    if (c.returning || c.failed) c.introDone = true;
+    root.dataset.state = c.failed ? 'error' : (c.ready ? 'ready' : 'loading');
+    root.dataset.mode = c.returning ? 'returning' : 'cinematic';
+    root.dataset.motion = c.reduced ? 'reduced' : 'full';
+    root.dataset.cinema = c.introDone ? 'settled' : 'playing';
+    delete root.dataset.exiting;
+    title.textContent = settings.title;
+    detail.textContent = c.ready ? 'Your fly is ready.' : settings.detail;
+    phase.textContent = c.failed ? 'LOADING STOPPED' : (c.ready ? 'READY' : 'PREPARING THE WORLD');
+    retryButton.hidden = !c.failed;
+    dock.querySelector('.cl-dock-text').textContent = 'Loading continues';
+    returnFocus = document.activeElement;
+    if (!c.skipped) reveal();
+    else { root.hidden = true; dock.hidden = false; }
+    if (!c.introDone) c.introTimer = window.setTimeout(() => {
+      if (cycle !== c || c.ended) return;
+      endCinema(c, false); maybeComplete(c);
+    }, c.reduced ? REDUCED_MS : INTRO_MS);
+    if (!c.ready && !c.failed) armLoading(c, settings.timeoutMs);
+    updateTime(); maybeComplete(c);
   }
   function show(options) {
     const settings = Object.assign({}, defaults, options || {});
+    if (!cycle || cycle.ended) cycle = makeCycle(settings);
+    const c = cycle;
     if (!document.body) {
-      pending = settings;
-      document.addEventListener('DOMContentLoaded', () => {
-        if (pending) { const next = pending; pending = null; show(next); }
-        if (pendingFailure) { const next = pendingFailure; pendingFailure = null; fail(next.message, next.retry); }
-      }, { once: true });
+      pendingOptions = settings;
+      if (!waitingForBody) {
+        waitingForBody = true;
+        document.addEventListener('DOMContentLoaded', () => {
+          waitingForBody = false;
+          if (cycle === c && !c.ended) startMountedCycle(c, pendingOptions || settings);
+          pendingOptions = null;
+        }, { once: true });
+      }
       return;
     }
-    mount();
-    syncTheme();
-    if (!active) {
-      startedAt = performance.now();
-      returnFocus = document.activeElement;
-      active = true;
-      root.dataset.state = 'loading';
-      phase.textContent = 'PREPARING THE WORLD';
-      retryButton.hidden = true;
-      dock.querySelector('.cl-dock-text').textContent = 'Loading continues';
-      retryAction = typeof settings.retry === 'function' ? settings.retry : null;
-      tick = window.setInterval(updateTime, 1000);
-      const wait = Number(settings.timeoutMs);
-      if (wait > 0 && Number.isFinite(wait)) timeout = window.setTimeout(() => {
-        if (!active) return;
-        root.dataset.state = 'slow';
-        phase.textContent = 'STILL WAITING';
-        detail.textContent = 'This is taking longer than expected. Loading may still finish. You can keep waiting, hide this overlay, or retry.';
-        retryButton.hidden = false;
-        dock.querySelector('.cl-dock-text').textContent = 'Loading is taking longer';
-      }, wait);
-    }
-    title.textContent = settings.title;
-    detail.textContent = settings.detail;
-    updateTime();
+    if (!c.mounted) { startMountedCycle(c, settings); return; }
+    if (c.failed) resetForRetry(c);
+    syncTheme(); title.textContent = settings.title;
+    if (!c.ready) detail.textContent = settings.detail;
+    if (typeof settings.retry === 'function') c.retry = settings.retry;
     if (!visible) reveal();
   }
+  function resetForRetry(c) {
+    cancelExit(c); clearTimeout(c.introTimer); clearLoadTimers(c);
+    c.ready = c.failed = false; c.readyAt = null;
+    c.returning = c.introDone = true; c.skipped = false;
+    c.startedAt = performance.now();
+    root.dataset.mode = 'returning'; root.dataset.cinema = 'settled'; root.dataset.state = 'loading';
+    retryButton.hidden = true; phase.textContent = 'TRYING AGAIN'; detail.textContent = 'Preparing the experiment…';
+    dock.querySelector('.cl-dock-text').textContent = 'Loading continues';
+    reveal(); updateTime(); armLoading(c, defaults.timeoutMs);
+    // Preserve the same pending completion promise across a retry.
+  }
   function update(message) {
-    if (pending) pending.detail = String(message);
-    if (active && detail) detail.textContent = String(message);
+    if (pendingOptions) pendingOptions.detail = String(message);
+    if (cycle && !cycle.ended && !cycle.ready && detail) detail.textContent = String(message);
   }
   function finish() {
-    pending = pendingFailure = null;
-    if (!active) return;
-    active = false;
-    stopTimers();
-    // Readiness controls the handoff; the illustration never delays it.
-    const hadFocus = visible && root.contains(document.activeElement);
-    visible = false;
-    root.hidden = dock.hidden = true;
-    document.documentElement.classList.remove('chanj-loading-lock');
-    if (hadFocus) restoreFocus();
+    if (!cycle) return Promise.resolve();
+    const c = cycle;
+    if (c.ended) return c.promise;
+    if (!c.ready) c.readyAt = performance.now();
+    c.ready = true; c.failed = false; clearLoadTimers(c);
+    if (root) {
+      root.dataset.state = 'ready'; phase.textContent = 'READY';
+      detail.textContent = 'Your fly is ready.'; retryButton.hidden = true;
+      updateTime();
+    }
+    maybeComplete(c);
+    return c.promise;
   }
   function fail(message, retry) {
-    if (!active) show({ title: 'A connection is missing.', detail: message });
-    if (!root) { pendingFailure = { message, retry }; return; }
-    updateTime();
-    stopTimers();
-    root.dataset.state = 'error';
+    if (!cycle || cycle.ended) show({ title: 'A connection is missing.', detail: message });
+    const c = cycle;
+    c.ready = false; c.failed = true; c.readyAt = performance.now();
+    clearLoadTimers(c); clearTimeout(c.introTimer); cancelExit(c);
+    c.introDone = true;
+    c.retry = typeof retry === 'function' ? retry : null;
+    if (!root) {
+      pendingOptions = Object.assign({}, pendingOptions || defaults, { detail: String(message) });
+      return;
+    }
+    root.dataset.state = 'error'; root.dataset.cinema = 'settled';
     phase.textContent = 'LOADING STOPPED';
     detail.textContent = String(message || 'The experiment could not load. Please retry.');
-    retryAction = typeof retry === 'function' ? retry : null;
-    retryButton.hidden = false;
-    // Legacy app failures disable all buttons; loader controls stay usable.
+    retryButton.hidden = false; updateTime();
     for (const button of root.querySelectorAll('button')) button.disabled = false;
     dock.disabled = false;
     dock.querySelector('.cl-dock-text').textContent = 'Loading needs attention';
     if (visible) retryButton.focus({ preventScroll: true });
   }
+  motionPreference.addEventListener('change', event => {
+    if (!event.matches || !cycle || cycle.ended) return;
+    cycle.reduced = true;
+    if (cycle.exiting) cancelExit(cycle);
+    if (root) root.dataset.motion = 'reduced';
+    endCinema(cycle, false); maybeComplete(cycle);
+  });
   window.ChanjLoader = Object.freeze({ show, update, finish, fail, hide });
 }());

@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="en" data-theme="orange">
+<html lang="en" data-theme="noir">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f3efe7">
-<title>CHANJ — Brain &amp; behavior</title>
+<meta name="theme-color" content="#080809">
+<title>CHANJS — Brain &amp; behavior</title>
 <meta name="description" content="A small body. A world of connections. Explore a FlyWire brain, an embodied preview, and recorded whole-brain experiments.">
-<link rel="icon" href="data:,">
-<script>try{const t=new URL(location.href).searchParams.get('theme')||localStorage.getItem('chanj-theme');if(t==='orange'||t==='burgundy')document.documentElement.dataset.theme=t;}catch{}</script>
+<link rel="icon" type="image/svg+xml" href="../../assets/brand/fly-eye.svg">
+<script>try{const t=new URL(location.href).searchParams.get('theme')||localStorage.getItem('chanj-theme');if(t==='burgundy')document.documentElement.dataset.theme=t;else document.documentElement.dataset.theme='noir';}catch{}</script>
 <link rel="stylesheet" href="mobile.css">
 <link rel="stylesheet" href="../../loading.css">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
@@ -31,14 +31,14 @@
 <script>window.ChanjLoader?.show({title:'A little brain. A big world.',detail:'Preparing the body, brain and measured behavior'});</script>
 
 <header class="app-header">
-  <div class="brand"><span class="brand-mark" aria-hidden="true">✳</span><div><strong>CHANJ</strong><span>Brain &amp; behavior</span></div></div>
+  <div class="brand"><img class="brand-mark" src="../../assets/brand/fly-eye.svg" width="44" height="44" alt=""><div><strong>CHANJS</strong><span>Brain &amp; behavior</span></div></div>
   <div class="header-actions">
     <button class="desktop-controls" data-open-controls="behavior" aria-haspopup="dialog"><svg><use href="#i-sliders"/></svg>Controls</button>
     <div class="theme-switch" role="group" aria-label="Color theme">
-      <button type="button" data-theme-choice="orange" aria-label="Firebird orange theme" aria-pressed="true" title="Firebird orange"><i class="theme-swatch swatch-orange"></i><span>Firebird</span></button>
+      <button type="button" data-theme-choice="noir" aria-label="Noir theme" aria-pressed="true" title="Noir"><i class="theme-swatch swatch-noir"></i><span>Noir</span></button>
       <button type="button" data-theme-choice="burgundy" aria-label="Burgundy theme" aria-pressed="false" title="Burgundy"><i class="theme-swatch swatch-burgundy"></i><span>Burgundy</span></button>
     </div>
-    <button class="icon-button help-trigger" data-help="about" aria-label="About CHANJ"><svg><use href="#i-info"/></svg></button>
+    <button class="icon-button help-trigger" data-help="about" aria-label="About Chanjs"><svg><use href="#i-info"/></svg></button>
   </div>
 </header>
 
@@ -68,7 +68,7 @@
   <div class="preview-transport"><button class="primary play-button" id="play" disabled>Preparing…</button><button class="icon-button reset-button" id="reset" aria-label="Reset experiment" title="Reset"><svg><use href="#i-reset"/></svg></button><label class="speed-control"><span class="sr-only">Preview speed</span><select id="speed" aria-label="Preview speed"><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option></select></label><button class="icon-button" data-open-controls="replays" aria-label="Open recorded experiments" title="Recorded experiments"><svg><use href="#i-arrow"/></svg></button></div>
   <div class="playback" id="playback"><div class="playback-row"><button class="primary play-button" id="pb-play">Play recording</button><button class="compact-button" id="pb-live">Exit replay</button><label class="speed-control"><span class="sr-only">Recording speed</span><select id="pb-speed" aria-label="Recording playback speed"><option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option></select></label></div><input type="range" id="pb-scrub" aria-label="Recording position" min="0" max="1000" value="0"></div>
 </div>
-<nav class="mode-nav" aria-label="Explore CHANJ">
+<nav class="mode-nav" aria-label="Explore Chanjs">
   <button data-view-choice="arena" aria-pressed="true"><svg><use href="#i-arena"/></svg><span>Arena</span><i></i></button>
   <button data-view-choice="brain" aria-pressed="false"><svg><use href="#i-brain"/></svg><span>Brain</span><i></i></button>
   <button data-open-controls="behavior" aria-haspopup="dialog"><svg><use href="#i-sliders"/></svg><span>Controls</span><i></i></button>
@@ -76,22 +76,24 @@
 
 <dialog class="sheet controls-sheet panel" id="controls" aria-labelledby="controls-title">
   <div class="sheet-grip" aria-hidden="true"></div>
-  <header class="sheet-header"><div><span class="eyebrow">YOUR EXPERIMENT</span><h2 id="controls-title">Change the conditions.</h2></div><button class="icon-button" data-close-dialog aria-label="Close controls"><svg><use href="#i-close"/></svg></button></header>
+  <header class="sheet-header"><div><span class="eyebrow">YOUR EXPERIMENT</span><h2 id="controls-title">Your experiment.</h2></div><button class="icon-button" data-close-dialog aria-label="Close controls"><svg><use href="#i-close"/></svg></button></header>
   <nav class="sheet-tabs" aria-label="Control sections"><button data-control-tab="behavior" aria-pressed="true">Behavior</button><button data-control-tab="arena" aria-pressed="false">Arena</button><button data-control-tab="replays" aria-pressed="false">Replays</button></nav>
   <div class="sheet-scroll">
     <section data-control-panel="behavior">
       <div class="section-title"><h3>Change the signal.</h3><button class="icon-button" data-help="modulators" aria-label="How neuromodulator controls work"><svg><use href="#i-info"/></svg></button></div>
-      <p class="intro-note">A small change can shift the decision.</p>
-      <div class="knob"><div class="row"><label for="reward"><span class="dot" style="--dot:var(--pam)"></span>Reward dopamine<span>PAM</span></label><output class="val" id="v-reward">0.00</output></div><input type="range" id="reward" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div></div>
-      <div class="knob"><div class="row"><label for="punish"><span class="dot" style="--dot:var(--ppl1)"></span>Punishment dopamine<span>PPL1</span></label><output class="val" id="v-punish">0.00</output></div><input type="range" id="punish" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div></div>
-      <div class="knob"><div class="row"><label for="oa"><span class="dot" style="--dot:#b1a022"></span>Octopamine<span>OA–VPM4</span></label><output class="val" id="v-oa">0.00</output></div><input type="range" id="oa" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div></div>
+      <p class="intro-note">Compare the fly’s response to each signal.</p>
+      <div class="preset-set" role="group" aria-label="Starting presets"><button id="preset-baseline" aria-pressed="true" title="Natural settings: PAM 0"><strong>Baseline</strong><span>Natural</span></button><button id="preset-bold" aria-pressed="false" title="Stronger food approach bias: PAM +1"><strong>Bold</strong><span>More food pull</span></button><button id="preset-cautious" aria-pressed="false" title="Weaker food approach bias: PAM −1"><strong>Cautious</strong><span>Less food pull</span></button></div>
+      <p class="preset-note" id="preset-status" role="status">Starting settings; outcomes depend on the scene.</p>
+      <div class="knob"><div class="row"><label for="reward"><span class="dot" style="--dot:var(--pam)"></span>Food attraction<span>Reward dopamine · PAM</span></label><output class="val" id="v-reward">0.00</output></div><input type="range" id="reward" aria-describedby="reward-effect" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div><p class="control-effect" id="reward-effect">Higher values usually strengthen the approach to food.</p></div>
+      <div class="knob"><div class="row"><label for="punish"><span class="dot" style="--dot:var(--ppl1)"></span>Approach brake<span>Punishment dopamine · PPL1</span></label><output class="val" id="v-punish">0.00</output></div><input type="range" id="punish" aria-describedby="punish-effect" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div><p class="control-effect" id="punish-effect">Blocking can strengthen approach; extra stimulation may have little effect here.</p></div>
+      <div class="knob"><div class="row"><label for="oa"><span class="dot" style="--dot:#b1a022"></span>Walking drive<span>Octopamine · OA–VPM4</span></label><output class="val" id="v-oa">0.00</output></div><input type="range" id="oa" aria-describedby="oa-effect" min="-1" max="1" step="0.05" value="0"><div class="range-ends"><span>Blocked</span><span>Natural</span><span>Driven</span></div><p class="control-effect" id="oa-effect">Higher values increase walking speed through an assumed gain.</p></div>
       <p class="subtle-note">These controls manipulate a model. They do not represent emotions or measured hormone concentrations.</p>
     </section>
     <section data-control-panel="arena" hidden>
       <div class="section-title"><h3>Set the scene.</h3><button class="icon-button" data-help="newspaper" aria-label="About newspaper mode"><svg><use href="#i-info"/></svg></button></div>
       <p class="intro-note">Move food and danger directly in the arena.</p>
-      <div class="knob"><div class="row"><label for="danger"><span class="dot" style="--dot:var(--danger)"></span>Danger strength</label><output class="val" id="v-danger">1.60</output></div><input type="range" id="danger" min="0" max="3" step="0.05" value="1.6"><div class="range-ends"><span>None</span><span>Strong</span></div></div>
-      <div class="knob"><div class="row"><label for="heading">Starting direction</label><output class="val" id="v-heading">0°</output></div><input type="range" id="heading" min="-180" max="180" step="5" value="0"><div class="range-ends"><span>−180°</span><span>0°</span><span>180°</span></div></div>
+      <div class="knob"><div class="row"><label for="danger"><span class="dot" style="--dot:var(--danger)"></span>Danger strength</label><output class="val" id="v-danger">1.60</output></div><input type="range" id="danger" aria-describedby="danger-effect" min="0" max="3" step="0.05" value="1.6"><div class="range-ends"><span>None</span><span>Strong</span></div><p class="control-effect" id="danger-effect">Stronger sources increase the model’s turn-away reflex.</p></div>
+      <div class="knob"><div class="row"><label for="heading">Starting direction</label><output class="val" id="v-heading">0°</output></div><input type="range" id="heading" aria-describedby="heading-effect" min="-180" max="180" step="5" value="0"><div class="range-ends"><span>−180°</span><span>0°</span><span>180°</span></div><p class="control-effect" id="heading-effect">Sets the direction the fly faces at the start.</p></div>
       <div class="btns"><button id="reset-pos">Reset positions</button><button id="rand-heading">Random direction</button></div>
       <button class="help-row" data-help="gestures"><svg><use href="#i-hand"/></svg><span>Drag, rotate, zoom.<small>A quick guide to exploring the scene</small></span><svg><use href="#i-arrow"/></svg></button>
       <button class="help-row" data-help="newspaper"><svg><use href="#i-paper"/></svg><span>Play with a newspaper.<small>A game layer with collision rules</small></span><svg><use href="#i-arrow"/></svg></button>
@@ -105,7 +107,7 @@
       <div class="status" id="real-status" role="status">New full-brain runs require the Python runtime.</div>
     </section>
   </div>
-  <footer class="sheet-footer"><span class="status-dot"></span>Explore freely. Every change stays in this session.</footer>
+  <footer class="sheet-footer settings-footer"><button id="reset-settings"><svg><use href="#i-reset"/></svg>Reset all settings</button><span>Restore the natural starting conditions</span></footer>
 </dialog>
 
 <dialog class="sheet brain-sheet" id="brain-details" aria-labelledby="brain-details-title">
@@ -114,7 +116,7 @@
   <div class="sheet-scroll brain-data"><div data-brain-content="groups"><p class="intro-note">Mean firing rate by neural group.</p><div id="brain-legend"></div></div><div data-brain-content="pathway" hidden><div id="circuit"></div></div></div>
 </dialog>
 
-<dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title"><div class="help-top"><span class="help-symbol"><svg><use href="#i-info"/></svg></span><button class="icon-button" data-close-dialog aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><span class="eyebrow" id="help-kicker">A QUICK GUIDE</span><h2 id="help-title">Welcome to CHANJ.</h2><div id="help-content"></div><button class="primary help-done" data-close-dialog>Got it<svg><use href="#i-arrow"/></svg></button></dialog>
+<dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title"><div class="help-top"><span class="help-symbol"><svg><use href="#i-info"/></svg></span><button class="icon-button" data-close-dialog aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><span class="eyebrow" id="help-kicker">A QUICK GUIDE</span><h2 id="help-title">Welcome to Chanjs.</h2><div id="help-content"></div><button class="primary help-done" data-close-dialog>Got it<svg><use href="#i-arrow"/></svg></button></dialog>
 <div class="coachmark" id="coachmark" hidden><svg><use href="#i-hand"/></svg><p>Meet your fly.<span>Drag the scene. Try a different signal in Controls.</span></p><button class="icon-button" id="dismiss-coach" aria-label="Dismiss tip"><svg><use href="#i-close"/></svg></button></div>
 <script type="module" src="ui.js"></script>
 <script type="module">import('./app.js').catch(error=>{console.error(error);window.ChanjLoader?.fail('The sandbox could not start. Check your connection and WebGL support, then retry.',()=>location.reload());});</script>

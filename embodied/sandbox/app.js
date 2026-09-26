@@ -386,11 +386,11 @@ B.camera.position.set(0, 1.2, 13.5);
 // Themes change the stage lighting, never the scientific group colors.
 function applySceneTheme() {
   const burgundy = document.documentElement.dataset.theme === 'burgundy';
-  const background = burgundy ? 0x1b1219 : 0x181512;
+  const background = burgundy ? 0x1b1018 : 0x09090b;
   A.scene.background.setHex(background); A.scene.fog.color.setHex(background);
-  floor.material.color.setHex(burgundy ? 0x21191f : 0x211e19);
-  B.scene.background.setHex(burgundy ? 0x140e13 : 0x100f0d);
-  hemi.color.setHex(burgundy ? 0xe7cad8 : 0xeadccb);
+  floor.material.color.setHex(burgundy ? 0x231820 : 0x121215);
+  B.scene.background.setHex(burgundy ? 0x120c12 : 0x050506);
+  hemi.color.setHex(burgundy ? 0xe7cad8 : 0xe2d1d5);
 }
 applySceneTheme();
 window.addEventListener('chanj:themechange', applySceneTheme);
@@ -786,7 +786,7 @@ A.renderer.domElement.addEventListener('pointermove', e => {
   pick(e); const p = new THREE.Vector3();
   if (ray.ray.intersectPlane(groundPlane, p)) { world[dragging] = [clamp(p.x, -60, 60), clamp(p.y, -60, 60)]; placeObjects(); }
 });
-const endDrag = () => { if (dragging) { dragging = null; A.controls.enabled = true; liveReset(); } };
+const endDrag = () => { if (dragging) { dragging = null; A.controls.enabled = true; markCustomSettings(); liveReset(); } };
 A.renderer.domElement.addEventListener('pointerup', endDrag);
 A.renderer.domElement.addEventListener('pointercancel', endDrag);
 
@@ -804,7 +804,7 @@ $('play').onclick = () => {
   playing = !playing; $('play').textContent = playing ? '⏸ Pause' : '▶ Start';
 };
 $('reset').onclick = () => { if (mode === 'playback') exitPlayback(); else liveReset(); };
-$('reset-pos').onclick = () => { world.food = [...DEFAULT_FOOD]; world.danger = [...DEFAULT_DANGER]; if (mode === 'playback') exitPlayback(); placeObjects(); liveReset(); };
+$('reset-pos').onclick = () => { world.food = [...DEFAULT_FOOD]; world.danger = [...DEFAULT_DANGER]; if (mode === 'playback') exitPlayback(); markCustomSettings(); placeObjects(); liveReset(); };
 $('rand-heading').onclick = () => { $('heading').value = Math.round((Math.random() * 360 - 180) / 5) * 5; $('heading').dispatchEvent(new Event('input')); };
 $('run-real').onclick = runReal;
 if (STATIC_HOSTING) {
@@ -817,9 +817,10 @@ if ($('replay-baseline')) $('replay-baseline').onclick = () => openRecording('2e
 if ($('replay-modulated')) $('replay-modulated').onclick = () => openRecording('19be51902d');
 $('game-again').onclick = () => {
   if (mode === 'playback') { clearGame(); flyRoot.position.set(0, 0, 0); recT = 0; recPlaying = true; $('pb-play').textContent = '⏸ Pause'; return; }
-  $('seed').value = +$('seed').value + 1; liveReset(); playing = true; $('play').textContent = '⏸ Pause';
+  $('seed').value = +$('seed').value + 1; markCustomSettings(); liveReset(); playing = true; $('play').textContent = '⏸ Pause';
 };
 $('props-btn').onclick = () => { if (mode === 'playback') exitPlayback(); setProps(!propsOn); };
+$('focus-btn').setAttribute('aria-pressed', String(focusOn));
 $('focus-btn').onclick = () => { focusOn = !focusOn; $('focus-btn').classList.toggle('on', focusOn); $('focus-btn').setAttribute('aria-pressed', String(focusOn)); hud(); };
 $('seed').addEventListener('input', () => { if (mode === 'playback') exitPlayback(); if (!playing) liveReset(); });
 $('pb-play').onclick = () => { if (game.over) { clearGame(); recT = 0; } if (recT >= rec.rows.length * 0.025 - 0.01) { recT = 0; } recPlaying = !recPlaying; $('pb-play').textContent = recPlaying ? '⏸ Pause' : '▶ Play recording'; };
@@ -835,6 +836,37 @@ $('cam-over').onclick = () => {
   const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 14;
   A.controls.target.set(cx, cy, 0); A.camera.position.set(cx - 0.35 * span, cy - 0.95 * span, 0.95 * span);
 };
+
+// Controlled comparisons: only the reward setting differs between these scenes.
+// The measured lookup changes approach tendency, not a guaranteed route or win.
+function applyPreset(reward, label, start = true) {
+  if (mode === 'playback') exitPlayback();
+  world.food = [...DEFAULT_FOOD]; world.danger = [...DEFAULT_DANGER];
+  for (const [id, value] of Object.entries({reward, punish: 0, oa: 0, danger: 1.6, heading: 0, seed: 0})) {
+    $(id).value = value; $(id).dispatchEvent(new Event('input'));
+  }
+  setProps(true); placeObjects(); liveReset();
+  if (!follow) $('cam-over').click();
+  for (const [id, value] of [['preset-baseline', 0], ['preset-bold', 1], ['preset-cautious', -1]]) {
+    $(id)?.setAttribute('aria-pressed', String(start && value === reward));
+  }
+  if ($('preset-status')) $('preset-status').textContent = label;
+  if (start && val) { playing = true; $('play').textContent = '⏸ Pause'; }
+}
+for (const [id, reward, label] of [
+  ['preset-baseline', 0, 'Baseline running · natural signals, original scene.'],
+  ['preset-bold', 1, 'Bold running · stronger food-attraction signal, same scene.'],
+  ['preset-cautious', -1, 'Cautious running · weaker food-attraction signal, same scene.']
+]) if ($(id)) $(id).onclick = () => applyPreset(reward, label);
+if ($('reset-settings')) $('reset-settings').onclick = () => {
+  applyPreset(0, 'Settings reset · press Start when you are ready.', false);
+  $('speed').value = '0.5'; $('pb-speed').value = '0.25'; $('seconds').value = '6';
+};
+function markCustomSettings() {
+  for (const preset of ['preset-baseline', 'preset-bold', 'preset-cautious']) $(preset)?.setAttribute('aria-pressed', 'false');
+  if ($('preset-status')) $('preset-status').textContent = 'Custom settings · watch how the movement changes.';
+}
+for (const id of ['reward', 'punish', 'oa', 'danger', 'heading', 'seed']) $(id).addEventListener('input', markCustomSettings);
 
 // headless live-preview run, used to check the preview against real runs (see README)
 window.sandboxDebug = {
@@ -867,13 +899,11 @@ if (qs.get('cam') !== 'follow') $('cam-over').click();
 liveReset();
 const runParam = qs.get('run');   // reopen a past real run: ?run=<id>
 if (runParam && /^[0-9a-f]{10}$/.test(runParam)) await openRecording(runParam);
-if (val && mode === 'live' && qs.get('autoplay') !== '0') $('play').click();
-window.ChanjLoader?.finish();
-document.dispatchEvent(new CustomEvent('chanj:ready', { detail: { autoplay: playing, props: propsOn, mode } }));
+let presentationReady = false;
 const clock = new THREE.Clock(); let hudT = 0, blinkT = 0;
 const flyPos = new THREE.Vector3();
 function frame() {
-  const rdt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  const delta = Math.min(clock.getDelta(), 0.05), rdt = presentationReady ? delta : 0, t = clock.elapsedTime;
   if (mode === 'live') {
     const dt = rdt * +$('speed').value;
     if (playing) { liveStep(dt); liveBrain(dt); liveHudExtras(); }
@@ -925,3 +955,8 @@ function frame() {
   requestAnimationFrame(frame);
 }
 frame();
+// Render a ready scene underneath the opening; simulation time starts after its reveal.
+await window.ChanjLoader?.finish();
+presentationReady = true; clock.start();
+if (val && mode === 'live' && qs.get('autoplay') !== '0' && !playing) $('play').click();
+document.dispatchEvent(new CustomEvent('chanj:ready', { detail: { autoplay: playing, props: propsOn, mode } }));
