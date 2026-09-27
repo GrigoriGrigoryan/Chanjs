@@ -82,6 +82,14 @@ test('root and nested sandbox entries resolve all assets without publishing feed
     }
     for (const [page, pageUrl] of [[rootHtml, 'https://example.test/'], [html, base.href]]) {
       const documentBase = new URL(page.match(/<base\b[^>]*href="([^"]+)"/)?.[1] || pageUrl, pageUrl);
+      // Safari may resolve an inline relative import against the page URL,
+      // ignoring <base>. The actual bootstrap must resolve it explicitly.
+      const bootstrap = page.match(/import\(\s*new URL\((['"])(\.\/app\.js[^'"]*)\1,\s*document\.baseURI\)\.href\s*\)/);
+      assert.ok(bootstrap, `Bootstrap resolves app.js against document.baseURI at ${pageUrl}`);
+      const bootstrapUrl = new URL(bootstrap[2], documentBase);
+      assert.equal(bootstrapUrl.pathname, '/embodied/sandbox/app.js', 'Clean and nested pages import the same sandbox module');
+      assert.equal(bootstrapUrl.searchParams.get('v'), result.version, 'Explicit URL retains the deployed cache version');
+      assert.ok(fs.existsSync(path.join(output, bootstrapUrl.pathname.slice(1))), 'Resolved startup module is deployed');
       const favicon = [...page.matchAll(/<link\b[^>]*>/g)].map(match => match[0])
         .find(tag => /\brel="(?:shortcut )?icon"/.test(tag));
       assert.ok(favicon, 'The sandbox provides a favicon');

@@ -127,6 +127,13 @@
 <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title"><div class="help-top"><span class="help-symbol"><svg><use href="#i-info"/></svg></span><button class="icon-button" data-close-dialog aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><span class="eyebrow" id="help-kicker">A QUICK GUIDE</span><h2 id="help-title">Welcome to Chanjs.</h2><div id="help-content"></div><button class="primary help-done" data-close-dialog>Got it<svg><use href="#i-arrow"/></svg></button></dialog>
 <div class="coachmark" id="coachmark" hidden><svg><use href="#i-hand"/></svg><p>Body and brain, together.<span>Use the expand icons for a closer look. Both brings you back.</span></p><button class="icon-button" id="dismiss-coach" aria-label="Dismiss tip"><svg><use href="#i-close"/></svg></button></div>
 <script type="module" src="ui.js"></script>
-<script type="module">import('./app.js').catch(error=>{console.error(error);window.ChanjLoader?.fail('The sandbox could not start. Check your connection and WebGL support, then retry.',()=>location.reload());});</script>
+<script type="module">
+// Safari resolves inline dynamic imports against the page URL, ignoring <base>.
+// Resolve explicitly so the clean homepage and the local nested page both work.
+import(new URL('./app.js', document.baseURI).href).catch(error=>{
+  console.error(error);
+  window.ChanjLoader?.fail('The simulation could not start. Check your connection and WebGL support, then retry.',()=>location.reload());
+});
+</script>
 </body>
 </html>
