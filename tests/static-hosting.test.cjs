@@ -145,9 +145,15 @@ test('UI cache version is stable for identical content and changes after an asse
 
 test('legacy homepage and sandbox shortcuts redirect to the root presentation', () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
-  for (const source of ['/index.html', '/sandbox', '/sandbox/']) {
-    assert.equal(config.redirects.find(rule => rule.source === source)?.destination, '/');
+  const nestedEntries = ['/embodied/sandbox', '/embodied/sandbox/', '/embodied/sandbox/index.html'];
+  for (const source of ['/index.html', '/sandbox', '/sandbox/', ...nestedEntries]) {
+    assert.deepEqual(config.redirects.find(rule => rule.source === source), {
+      source, destination: '/', permanent: false,
+    }, 'Entry redirects preserve the incoming query string through Vercel’s default passthrough');
   }
-  assert.ok(!config.redirects.some(rule => rule.source.startsWith('/embodied/sandbox')),
-    'Existing nested recording links must remain directly available');
+  assert.deepEqual(
+    config.redirects.filter(rule => rule.source.startsWith('/embodied/sandbox')).map(rule => rule.source),
+    nestedEntries,
+    'Only exact page entries redirect; the root base URL must keep nested scripts, styles, and data accessible',
+  );
 });
